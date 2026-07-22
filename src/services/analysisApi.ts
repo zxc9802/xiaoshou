@@ -3,6 +3,17 @@ import type { AnalysisRequest } from '../types/analysis';
 
 const headers = { 'x-organization-id': 'default-org', 'x-user-id': 'demo-user', 'x-user-role': 'admin' };
 
+export function buildApiUrl(path: string, baseUrl = '') {
+  const normalizedBaseUrl = baseUrl.trim().replace(/\/+$/, '');
+  return normalizedBaseUrl ? `${normalizedBaseUrl}${path}` : path;
+}
+
+const apiBaseUrl = import.meta.env?.VITE_API_BASE_URL ?? '';
+
+function fetch(path: string, init?: RequestInit) {
+  return globalThis.fetch(buildApiUrl(path, apiBaseUrl), init);
+}
+
 async function parseResponse<T>(response: Response): Promise<T> {
   if (!response.ok) { const body = await response.json().catch(() => ({ message: '请求失败' })) as { message?: string }; throw new Error(body.message ?? `请求失败：${response.status}`); }
   if (response.status === 204) return undefined as T;
@@ -69,8 +80,8 @@ export const knowledgeApi = {
     list: (scope: 'active' | 'trash' = 'active') => fetch(`/api/v1/knowledge?scope=${scope}`, { headers }).then(parseResponse<KnowledgeEntry[]>),
   create: (entry: Pick<KnowledgeEntry, 'layer' | 'category' | 'title' | 'content' | 'version'> & { structuredData?: Record<string, unknown> }) => fetch('/api/v1/knowledge', { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify(entry) }).then(parseResponse<KnowledgeEntry>),
   uploadMedia: (id: string, file: File) => { const data = new FormData(); data.append('file', file, file.name); return fetch(`/api/v1/knowledge/${id}/media`, { method: 'POST', headers, body: data }).then(parseResponse<KnowledgeEntry>); },
-  mediaUrl: (id: string, mediaId: string) => `/api/v1/knowledge/${id}/media/${mediaId}`,
-  importSourceUrl: (importId: string, fileId: string) => `/api/v1/knowledge/imports/${importId}/files/${fileId}`,
+  mediaUrl: (id: string, mediaId: string) => buildApiUrl(`/api/v1/knowledge/${id}/media/${mediaId}`, apiBaseUrl),
+  importSourceUrl: (importId: string, fileId: string) => buildApiUrl(`/api/v1/knowledge/imports/${importId}/files/${fileId}`, apiBaseUrl),
     update: (id: string, input: Partial<Pick<KnowledgeEntry, 'category' | 'title' | 'content' | 'version' | 'structuredData'>>) => fetch(`/api/v1/knowledge/${id}`, { method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify(input) }).then(parseResponse<KnowledgeEntry>),
     copySystem: (id: string) => fetch(`/api/v1/knowledge/${id}/copy`, { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: '{}' }).then(parseResponse<KnowledgeEntry>),
     trash: (ids: string[]) => fetch('/api/v1/knowledge/batch-trash', { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) }).then(parseResponse<KnowledgeEntry[]>),
