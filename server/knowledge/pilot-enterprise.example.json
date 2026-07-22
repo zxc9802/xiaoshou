@@ -1,0 +1,29 @@
+{
+  "organization": "示例企业",
+  "productFacts": {
+    "industry": "【待填写】",
+    "products": [
+      {
+        "name": "企业版",
+        "coreSellingPoints": ["【待填写】", "【待填写】", "【待填写】"],
+        "competitorDifferences": ["【待填写】"],
+        "pricePolicy": "【待填写】",
+        "activePromotion": { "description": "【待填写】", "startsAt": null, "endsAt": null },
+        "allowedCommitments": ["【待填写】"]
+      }
+    ]
+  },
+  "enterpriseRedlines": {
+    "prohibitedPhrases": ["【待填写】"],
+    "forbiddenCommitments": ["【待填写】"],
+    "complianceRequirements": ["【待填写】"]
+  },
+  "salesStyle": {
+    "customerAddressing": "【待填写】",
+    "commonParticles": [],
+    "emojis": [],
+    "punctuation": "【待填写】",
+    "messageSplitting": "【待填写】",
+    "referenceMessages": []
+  }
+}

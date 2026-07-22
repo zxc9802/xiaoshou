@@ -1,0 +1,71 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { DEFAULT_KNOWLEDGE } from '../knowledge/defaults.js';
+import { analyzeWithRules } from '../rules/analysisEngine.js';
+import { parseConversationText } from './conversationParser.js';
+import { applyModelAdvice, parseModelSalesAdvice, type ModelSalesAdvice } from './salesAdvisor.js';
+
+function advice(sourceIds: string[]): ModelSalesAdvice {
+  return {
+    situationAnalysis: '客户仍在了解课程，但当前需要先确认价值顾虑。',
+    salesStrategy: { name: '异议隔离与价值重构', reason: '客户仍在互动，但担心投入不值。', conversionGoal: '让客户说出预算或应用价值中的主要顾虑', techniques: ['承接顾虑', '二选一推进'] },
+    followupAction: '先确认客户更关心预算还是实际应用价值。',
+    stage: '犹豫权衡',
+    stageEvidence: '客户表达价格顾虑，但没有明确拒绝。',
+    stageConfidence: 82,
+    explicitNeeds: ['判断课程是否适合当前企业。'],
+    implicitNeedHypotheses: [{ statement: '假设：客户希望降低决策风险。', confidence: 76, evidence: '客户仍在询问并比较。', validationQuestion: '您更担心预算，还是课程能否用于实际业务？' }],
+    salesLoopIssue: { type: '价值尚未对齐', problem: '销售尚未确认客户的核心顾虑。', reason: '继续介绍功能会增加信息负担。' },
+    replyGoal: '确认客户认为不值得的具体原因。',
+    recommendedReply: '理解您的顾虑。\n想先确认一下，您更担心预算压力，还是课程能否真正用于业务？',
+    alternativeReplies: [
+      { tone: '简洁', content: '您现在更担心预算，还是实际应用价值？' },
+      { tone: '柔和', content: '理解，您可以告诉我更担心预算还是实际应用，我只针对这一点说明。' },
+      { tone: '更有推进感', content: '我们先用10分钟确认需求，今天下午还是明天上午方便？' },
+    ],
+    nextBranches: [{ customerReply: '客户说明主要担心预算', nextAction: '确认预算范围，不立即降价。', suggestedLine: '您方便说一下大致预算范围吗？' }],
+    sourceIds,
+  };
+}
+
+test('model advice replaces local reply and records the real generation mode', () => {
+  const transcript = parseConversationText('客户：课程价格有点高\n销售：我们内容很多');
+  const now = new Date().toISOString();
+  const source = { id: 'approved-price-policy', origin: 'manual' as const, locked: false, layer: 'L3' as const, category: '价格政策', title: '已审核价格政策', content: '课程报价以企业已审核价格表为准。', version: '1.0', status: 'published' as const, createdAt: now, updatedAt: now };
+  const knowledge = [...DEFAULT_KNOWLEDGE, source];
+  const baseline = analyzeWithRules(transcript, knowledge);
+  const result = applyModelAdvice(baseline, advice([source.id]), transcript, knowledge, 'gemini-test');
+  assert.equal(result.generationMode, 'ai');
+  assert.equal(result.generationModel, 'gemini-test');
+  assert.match(result.recommendedReply, /课程能否真正用于业务/);
+  assert.equal(result.sourceReferences[0]?.id, source.id);
+  assert.equal(result.validationReport.passed, true);
+});
+
+test('model advice cannot cite unknown knowledge entries', () => {
+  const transcript = parseConversationText('客户：能保证效果吗？\n销售：可以');
+  const baseline = analyzeWithRules(transcript, DEFAULT_KNOWLEDGE);
+  const result = applyModelAdvice(baseline, { ...advice(['missing-source']), recommendedReply: '这个课程效果很好，您现在报名可以吗？' }, transcript, DEFAULT_KNOWLEDGE, 'gemini-test');
+  assert.equal(result.sourceReferences.length, 0);
+  assert.equal(result.validationReport.passed, false);
+  assert.ok(result.validationReport.unsupportedFacts.length > 0);
+});
+
+test('model advice cannot assert competitor characteristics without an approved competitor source', () => {
+  const transcript = parseConversationText('客户：网上有很多免费课程\n销售：我了解一下');
+  const baseline = analyzeWithRules(transcript, DEFAULT_KNOWLEDGE);
+  const result = applyModelAdvice(baseline, { ...advice([]), recommendedReply: '网上免费课程通常都不能落地，您报名我们的课程可以吗？' }, transcript, DEFAULT_KNOWLEDGE, 'gemini-test');
+  assert.equal(result.validationReport.passed, false);
+  assert.equal(result.validationReport.checks.find((check) => check.name === '竞品事实')?.passed, false);
+});
+
+test('empty model loop fields fall back to the local safety analysis', () => {
+  const transcript = parseConversationText('客户：我担心效果不明显\n销售：我再给您介绍一下配方');
+  const baseline = analyzeWithRules(transcript, DEFAULT_KNOWLEDGE);
+  const payload = advice([]);
+  payload.salesLoopIssue = { type: '', problem: '', reason: '' };
+  const parsed = parseModelSalesAdvice(JSON.stringify(payload), baseline);
+  assert.equal(parsed.salesLoopIssue.type, baseline.salesLoopIssue.type);
+  assert.equal(parsed.salesLoopIssue.problem, baseline.salesLoopIssue.problem);
+  assert.equal(parsed.salesLoopIssue.reason, baseline.salesLoopIssue.reason);
+});

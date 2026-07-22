@@ -1,0 +1,47 @@
+{
+  "name": "ai-sales-coach-workbench",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:api": "tsx watch --exclude .data/** server/index.ts",
+    "dev:worker": "tsx watch server/worker.ts",
+    "dev:all": "concurrently -k \"npm:dev:api\" \"npm:dev\"",
+    "build": "tsc -b && vite build",
+    "build:api": "tsc -p server/tsconfig.json",
+    "typecheck": "tsc -b --pretty false && tsc -p server/tsconfig.json --noEmit --pretty false",
+    "test": "node --import tsx --test server/**/*.test.ts",
+    "start:api": "node server-dist/server/index.js",
+    "start:worker": "node server-dist/server/worker.js",
+    "preview": "vite preview",
+    "migrate:cloud": "tsx server/scripts/migrateLocalToCloud.ts",
+    "knowledge:reindex": "tsx server/scripts/reindexKnowledge.ts",
+    "qdrant:up": "docker compose -f docker-compose.qdrant.yml up -d",
+    "qdrant:down": "docker compose -f docker-compose.qdrant.yml down",
+    "qdrant:logs": "docker compose -f docker-compose.qdrant.yml logs --tail=100 qdrant"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.864.0",
+    "@fastify/cors": "^11.0.1",
+    "@fastify/multipart": "^9.2.1",
+    "@vitejs/plugin-react": "latest",
+    "fastify": "^5.5.0",
+    "fflate": "^0.8.3",
+    "pdf-parse": "^2.4.5",
+    "pg": "^8.16.3",
+    "react": "latest",
+    "react-dom": "latest",
+    "typescript": "latest",
+    "vite": "latest",
+    "zod": "^4.0.17"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "@types/pg": "^8.15.5",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "concurrently": "^9.2.1",
+    "tsx": "^4.20.5"
+  }
+}
