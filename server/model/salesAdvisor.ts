@@ -86,6 +86,61 @@ function publishedKnowledge(entries: KnowledgeEntry[]) {
     .slice(0, 40);
 }
 
+type ConcreteFactKind = 'money' | 'percentage' | 'seats' | 'duration';
+
+interface ConcreteFact {
+  key: string;
+  kind: ConcreteFactKind;
+}
+
+function normalizedNumber(value: string) {
+  return String(Number(value.replace(/,/g, '')));
+}
+
+function concreteFacts(text: string) {
+  const facts = new Map<string, ConcreteFact>();
+  const add = (kind: ConcreteFactKind, value: string, unit = '') => {
+    const key = `${kind}:${normalizedNumber(value)}:${unit}`;
+    facts.set(key, { key, kind });
+  };
+  for (const match of text.matchAll(/(\d[\d,]*(?:\.\d+)?)\s*(万元|元)/g)) add('money', match[1]!, match[2]!);
+  for (const match of text.matchAll(/(\d+(?:\.\d+)?)\s*%/g)) add('percentage', match[1]!, '%');
+  for (const match of text.matchAll(/(\d+)\s*(?:个)?(?:销售)?席位/g)) add('seats', match[1]!, '席位');
+  for (const match of text.matchAll(/(\d+)\s*(?:个)?(工作日|天)/g)) add('duration', match[1]!, match[2]!);
+  return facts;
+}
+
+function isFactualSource(entry: KnowledgeEntry) {
+  return ['产品资料', '价格政策', '客户案例'].includes(sourceCategory(entry));
+}
+
+function entryFacts(entry: KnowledgeEntry) {
+  return concreteFacts(`${entry.title}\n${entry.category}\n${entry.content}`);
+}
+
+function selectEvidenceEntries(sourceIds: string[], knowledge: KnowledgeEntry[], reply: string) {
+  const published = publishedKnowledge(knowledge);
+  const publishedById = new Map(published.map((entry) => [entry.id, entry]));
+  const selected = [...new Set(sourceIds)]
+    .map((id) => publishedById.get(id))
+    .filter((entry): entry is KnowledgeEntry => Boolean(entry));
+  const selectedIds = new Set(selected.map((entry) => entry.id));
+  const facts = concreteFacts(reply);
+  const isCovered = (fact: ConcreteFact) => selected.some((entry) => isFactualSource(entry) && entryFacts(entry).has(fact.key));
+
+  for (const entry of published) {
+    if (selected.length >= 12 || selectedIds.has(entry.id) || !isFactualSource(entry)) continue;
+    if (![...facts.values()].some((fact) => !isCovered(fact) && entryFacts(entry).has(fact.key))) continue;
+    selected.push(entry);
+    selectedIds.add(entry.id);
+  }
+
+  return {
+    entries: selected,
+    factsGrounded: [...facts.values()].every(isCovered),
+  };
+}
+
 function transcriptText(transcript: ParsedConversation) {
   return transcript.messages.map((message) => `${message.role === 'customer' ? '客户' : message.role === 'sales' ? '销售' : '待确认'}：${message.text}`).join('\n');
 }
@@ -124,10 +179,18 @@ stage只能填写：初步了解、有兴趣在比较、犹豫权衡、接近成
 }
 
 export function applyModelAdvice(baseline: SalesAnalysisResult, advice: ModelSalesAdvice, transcript: ParsedConversation, knowledge: KnowledgeEntry[], modelName: string): SalesAnalysisResult {
-  const published = new Map(publishedKnowledge(knowledge).map((entry) => [entry.id, entry]));
-  const selectedSources = [...new Set(advice.sourceIds)].map((id) => published.get(id)).filter((entry): entry is KnowledgeEntry => Boolean(entry)).map((entry) => ({ id: entry.id, category: sourceCategory(entry), title: entry.title, version: entry.version, excerpt: entry.content.slice(0, 500), verified: true }));
   const recommendedReply = lineLimit(advice.recommendedReply);
-  const hasPublishedFacts = selectedSources.some((source) => source.category === '产品资料' || source.category === '价格政策' || source.category === '客户案例');
+  const evidence = selectEvidenceEntries(advice.sourceIds, knowledge, recommendedReply);
+  const selectedSources = evidence.entries.map((entry) => ({
+    id: entry.id,
+    category: sourceCategory(entry),
+    title: entry.title,
+    version: entry.version,
+    excerpt: entry.content.slice(0, 500),
+    verified: true,
+  }));
+  const hasPublishedFacts = evidence.factsGrounded
+    && evidence.entries.some((entry) => isFactualSource(entry));
   const validationReport = validateSalesReply(recommendedReply, transcript, hasPublishedFacts);
   const checks = [...validationReport.checks];
   const needsConversionTechnique = !baseline.handoffRequired && baseline.decisionStage !== 'lost_risk';

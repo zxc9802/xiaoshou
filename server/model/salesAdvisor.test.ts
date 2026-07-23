@@ -65,6 +65,48 @@ test('published L2 price knowledge is treated as factual price evidence before t
   assert.equal(result.validationReport.passed, true);
 });
 
+test('model advice recovers a matching published source from the current retrieval result', () => {
+  const transcript = parseConversationText('客户：企业版一年多少钱？\n销售：我查一下');
+  const source = knowledgeSource({
+    id: 'retrieved-enterprise-price',
+    layer: 'L2',
+    category: '套餐及价格',
+    title: '企业版价格与交付标准',
+    content: '企业版年费29,800元，最多80个销售席位，10个工作日标准交付。',
+    structuredData: { businessCategory: '产品资料' },
+  });
+  const knowledge = [...DEFAULT_KNOWLEDGE, source];
+  const baseline = analyzeWithRules(transcript, knowledge);
+  const result = applyModelAdvice(baseline, {
+    ...advice([]),
+    recommendedReply: '理解您的预算顾虑。企业版年费为29,800元，最多80个销售席位，标准交付为10个工作日，您看可以吗？',
+  }, transcript, knowledge, 'gemini-test');
+
+  assert.equal(result.sourceReferences.some((item) => item.id === source.id), true);
+  assert.equal(result.validationReport.passed, true);
+});
+
+test('model advice stays blocked when a cited source does not contain every concrete fact', () => {
+  const transcript = parseConversationText('客户：企业版一年多少钱？\n销售：我查一下');
+  const source = knowledgeSource({
+    id: 'approved-enterprise-price',
+    layer: 'L2',
+    category: '套餐及价格',
+    title: '企业版价格与交付标准',
+    content: '企业版年费29,800元，最多80个销售席位，10个工作日标准交付。',
+    structuredData: { businessCategory: '产品资料' },
+  });
+  const knowledge = [...DEFAULT_KNOWLEDGE, source];
+  const baseline = analyzeWithRules(transcript, knowledge);
+  const result = applyModelAdvice(baseline, {
+    ...advice([source.id]),
+    recommendedReply: '理解您的预算顾虑。企业版年费为39,800元，最多80个销售席位，标准交付为10个工作日，您看可以吗？',
+  }, transcript, knowledge, 'gemini-test');
+
+  assert.equal(result.validationReport.passed, false);
+  assert.equal(result.validationReport.checks.find((check) => check.name === '事实依据')?.passed, false);
+});
+
 test('model advice replaces local reply and records the real generation mode', () => {
   const transcript = parseConversationText('客户：课程价格有点高\n销售：我们内容很多');
   const now = new Date().toISOString();

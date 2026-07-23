@@ -70,3 +70,10 @@ test('discussing a customer concern about results is not treated as an unsupport
   assert.equal(report.unsupportedFacts.length, 0);
   assert.equal(report.checks.find((check) => check.name === '事实依据')?.passed, true);
 });
+
+test('numeric commercial claims require published factual evidence', () => {
+  const transcript = parseConversationText('客户：请介绍企业版\n销售：我核实一下');
+  const report = validateSalesReply('企业版年费39,800元，最多80席位，10个工作日交付，您看可以吗？', transcript, false);
+  assert.equal(report.passed, false);
+  assert.ok(report.unsupportedFacts.length > 0);
+});

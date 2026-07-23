@@ -73,7 +73,7 @@ export function validateSalesReply(reply: string, transcript: ParsedConversation
   const redlineHits = redlinePatterns.filter((pattern) => pattern.test(reply)).map((pattern) => pattern.source);
   const lineCount = reply.split(/\n/).filter(Boolean).length;
   const hookPresent = /[？?]|您看|可以吗|方便吗|还是/.test(reply);
-  const unsupportedFactClaim = /价格|折扣|优惠|客户案例|实施周期|效果(?:明显|很好|提升|达到|保证)/.test(reply);
+  const unsupportedFactClaim = /价格|年费|折扣|优惠|客户案例|实施周期|席位|工作日|\d[\d,]*(?:\.\d+)?\s*(?:万元|元|%)|效果(?:明显|很好|提升|达到|保证)/.test(reply);
   const unsupportedFacts = !hasPublishedFacts && !reply.includes('【待补充：') && unsupportedFactClaim ? ['回复包含企业资料库未提供依据的事实性内容'] : [];
   const checks = [
     { name: '安全红线', passed: redlineHits.length === 0, detail: redlineHits.length ? `命中：${redlineHits.join('、')}` : '未命中禁用话术' },
