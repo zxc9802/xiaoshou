@@ -1,7 +1,7 @@
 import type { AnalysisHistoryItem, AnalysisJob, ConversationReview, CustomerDealStatus, CustomerProfile, CustomerReminderSummary, DashboardMetrics, KnowledgeCandidate, KnowledgeEntry, KnowledgeImportContext, KnowledgeImportJob, ParsedConversation, ProductProfile, ProductProfileDetail, ProductProfileView, ProductStatus, ReviewMetrics, ReviewOutcome, SalesStyleProfile } from '../types/analysis';
 import type { AnalysisRequest } from '../types/analysis';
 
-const headers = { 'x-organization-id': 'default-org', 'x-user-id': 'demo-user', 'x-user-role': 'admin' };
+const headers = {};
 
 export function buildApiUrl(path: string, baseUrl = '') {
   const normalizedBaseUrl = baseUrl.trim().replace(/\/+$/, '');
@@ -11,11 +11,17 @@ export function buildApiUrl(path: string, baseUrl = '') {
 const apiBaseUrl = import.meta.env?.VITE_API_BASE_URL ?? '';
 
 function fetch(path: string, init?: RequestInit) {
-  return globalThis.fetch(buildApiUrl(path, apiBaseUrl), init);
+  return globalThis.fetch(buildApiUrl(path, apiBaseUrl), { credentials: 'include', ...init });
 }
 
 async function parseResponse<T>(response: Response): Promise<T> {
-  if (!response.ok) { const body = await response.json().catch(() => ({ message: '请求失败' })) as { message?: string }; throw new Error(body.message ?? `请求失败：${response.status}`); }
+  if (!response.ok) {
+    if (response.status === 401 && typeof window !== 'undefined') {
+      window.location.assign('https://www.qycm.top/home2?externalSso=xiaoshou');
+    }
+    const body = await response.json().catch(() => ({ message: '请求失败' })) as { message?: string };
+    throw new Error(body.message ?? `请求失败：${response.status}`);
+  }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
