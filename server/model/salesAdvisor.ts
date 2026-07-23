@@ -69,12 +69,14 @@ export function parseModelSalesAdvice(raw: string, baseline: SalesAnalysisResult
 
 function sourceCategory(entry: KnowledgeEntry): SourceReference['category'] {
   const businessCategory = String(entry.structuredData?.businessCategory ?? '');
+  const semanticLabel = `${entry.category}\n${entry.title}`;
   if (businessCategory === '竞品口径') return '竞品口径';
   if (businessCategory === '售后承诺') return '售后承诺';
   if (businessCategory === '禁用红线' || entry.layer === 'L0') return '禁用红线';
+  if (businessCategory === '客户案例' || semanticLabel.includes('案例')) return '客户案例';
+  if (/价格|套餐|报价|折扣|优惠|费用|年费/.test(semanticLabel)) return '价格政策';
+  if (businessCategory === '产品资料') return '产品资料';
   if (businessCategory === '销售技巧' || entry.layer === 'L1' || entry.layer === 'L2') return '销售技巧';
-  if (entry.category.includes('案例')) return '客户案例';
-  if (entry.category.includes('价格') || entry.title.includes('价格')) return '价格政策';
   return entry.layer === 'L3' ? '产品资料' : '销售规则';
 }
 

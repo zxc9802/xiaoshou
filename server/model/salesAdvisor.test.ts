@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import type { KnowledgeEntry } from '../../shared/contracts.js';
 import { DEFAULT_KNOWLEDGE } from '../knowledge/defaults.js';
 import { analyzeWithRules } from '../rules/analysisEngine.js';
 import { parseConversationText } from './conversationParser.js';
@@ -27,6 +28,42 @@ function advice(sourceIds: string[]): ModelSalesAdvice {
     sourceIds,
   };
 }
+
+function knowledgeSource(input: Pick<KnowledgeEntry, 'id' | 'title' | 'content'> & Partial<KnowledgeEntry>): KnowledgeEntry {
+  const now = new Date().toISOString();
+  return {
+    origin: 'manual',
+    locked: false,
+    layer: 'L3',
+    category: '产品资料',
+    version: '1.0',
+    status: 'published',
+    createdAt: now,
+    updatedAt: now,
+    ...input,
+  };
+}
+
+test('published L2 price knowledge is treated as factual price evidence before the layer fallback', () => {
+  const transcript = parseConversationText('客户：企业版价格是多少？\n销售：我核实一下');
+  const source = knowledgeSource({
+    id: 'l2-enterprise-price',
+    layer: 'L2',
+    category: '价格配置',
+    title: '星河AI销转助手版本价格与交付标准',
+    content: '企业版年费为29,800元，最多80个销售席位，标准交付周期为10个工作日。',
+    structuredData: { businessCategory: '产品资料' },
+  });
+  const knowledge = [...DEFAULT_KNOWLEDGE, source];
+  const baseline = analyzeWithRules(transcript, knowledge);
+  const result = applyModelAdvice(baseline, {
+    ...advice([source.id]),
+    recommendedReply: '理解您对价格的关注。企业版价格为29,800元，最多80个销售席位，标准交付周期为10个工作日，您看可以吗？',
+  }, transcript, knowledge, 'gemini-test');
+
+  assert.equal(result.sourceReferences[0]?.category, '价格政策');
+  assert.equal(result.validationReport.passed, true);
+});
 
 test('model advice replaces local reply and records the real generation mode', () => {
   const transcript = parseConversationText('客户：课程价格有点高\n销售：我们内容很多');
