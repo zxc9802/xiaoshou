@@ -6,6 +6,7 @@ const PRODUCT = 'xiaoshou';
 const COOKIE_NAME = 'qycm_xiaoshou_sso';
 const SESSION_MAX_AGE_SECONDS = 5 * 60;
 const MAIN_APP_URL_FALLBACK = 'https://www.qycm.top';
+const PUBLIC_APP_URL_FALLBACK = 'https://xiaoshou.qycm.top';
 
 export type MainAppUser = {
   id: string;
@@ -57,6 +58,10 @@ function isSession(value: unknown): value is SsoSession {
 
 export function getMainAppUrl(): string {
   return (process.env.MAIN_APP_URL?.trim() || MAIN_APP_URL_FALLBACK).replace(/\/+$/, '');
+}
+
+export function getPublicAppUrl(): string {
+  return (process.env.PUBLIC_APP_URL?.trim() || PUBLIC_APP_URL_FALLBACK).replace(/\/+$/, '');
 }
 
 export function getMainAppSsoLaunchUrl(): string {

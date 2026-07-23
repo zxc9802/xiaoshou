@@ -30,15 +30,21 @@ test('encrypts the main token inside the Fastify session cookie', () => {
 });
 
 test('Fastify protects v1 routes with a validated SSO actor', async () => {
-  const [server, api] = await Promise.all([
+  const [server, api, env] = await Promise.all([
     readFile(path.join(process.cwd(), 'server/index.ts'), 'utf8'),
     readFile(path.join(process.cwd(), 'src/services/analysisApi.ts'), 'utf8'),
+    readFile(path.join(process.cwd(), '.env.example'), 'utf8'),
   ]);
 
   assert.match(server, /app\.get\('\/api\/sso\/callback'/);
+  assert.match(server, /getPublicAppUrl/);
+  assert.match(server, /new URL\(redirectPath,\s*getPublicAppUrl\(\)\)/);
   assert.match(server, /request\.ssoActor/);
   assert.match(server, /validateMainAppSession/);
   assert.doesNotMatch(server, /x-organization-id/);
   assert.doesNotMatch(api, /x-organization-id/);
   assert.match(api, /credentials:\s*'include'/);
+  assert.match(env, /CORS_ORIGIN=https:\/\/xiaoshou\.qycm\.top/);
+  assert.match(env, /PUBLIC_APP_URL=https:\/\/xiaoshou\.qycm\.top/);
+  assert.match(env, /VITE_API_BASE_URL=https:\/\/xiaoshou-api\.qycm\.top/);
 });
