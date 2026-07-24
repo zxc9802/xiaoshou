@@ -287,8 +287,8 @@ app.patch('/api/v1/customers/:id/status', async (request) => {
   return analyses.setCustomerDealStatus((request.params as { id: string }).id, body.status, actor(request));
 });
 app.patch('/api/v1/customers/:id/remark', async (request) => {
-  const body = z.object({ remark: z.string().trim().min(1).max(40) }).parse(request.body ?? {});
-  return analyses.setCustomerRemark((request.params as { id: string }).id, body.remark, actor(request));
+  const body = z.object({ remark: z.string().trim().min(1).max(40), analysisId: z.string().min(1).optional() }).parse(request.body ?? {});
+  return analyses.setCustomerRemark((request.params as { id: string }).id, body.remark, actor(request), body.analysisId);
 });
 app.get('/api/v1/knowledge', async (request) => {
   const query = z.object({ scope: z.enum(['active', 'trash']).optional() }).parse(request.query ?? {});

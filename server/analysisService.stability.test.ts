@@ -65,3 +65,17 @@ test('editing a customer remark does not reset the follow-up clock', async () =>
   assert.equal(stored?.lastProgressAt, progressAt);
   assert.equal(stored?.nextFollowUpAt, reminderAt);
 });
+
+test('editing a customer remark follows the latest analysis after a profile merge', async () => {
+  const repository = new MemoryRepository();
+  const service = new AnalysisService(repository, new MemoryObjectStorage(), new RuleBasedConversationParser(), config);
+  const created = await service.create({ conversation: '客户：稍后联系', attachmentNames: [] }, [], actor);
+  const staleProfileId = created.customerProfileId!;
+  created.customerProfileId = 'merged-profile';
+  await repository.updateJob(created);
+
+  const updated = await service.setCustomerRemark(staleProfileId, '合并后的客户', actor, created.id);
+
+  assert.equal(updated.id, 'merged-profile');
+  assert.equal((await repository.getJob(created.id))?.customerManualRemark, '合并后的客户');
+});

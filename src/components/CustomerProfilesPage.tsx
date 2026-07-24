@@ -5,6 +5,10 @@ import { ArrowIcon, CheckIcon, SparkIcon } from './Icons';
 
 const temperatureLabels = { high: '高意向', mid: '中等意向', low: '低意向' } as const;
 
+export function replaceCustomerProfile(profiles: CustomerProfile[], currentId: string, updated: CustomerProfile) {
+  return profiles.map((profile) => profile.id === currentId ? updated : profile);
+}
+
 export function CustomerProfilesPage({ onBack, onOpenAnalysis, onReminderChange }: { onBack: () => void; onOpenAnalysis: (analysisId: string) => void; onReminderChange: () => void | Promise<void> }) {
   const [profiles, setProfiles] = useState<CustomerProfile[]>([]);
   const [dealStatus, setDealStatus] = useState<CustomerDealStatus>('unwon');
@@ -47,7 +51,7 @@ export function CustomerProfilesPage({ onBack, onOpenAnalysis, onReminderChange 
     try {
       setUpdatingId(profile.id); setError('');
       const updated = await customerApi.setStatus(profile.id, nextStatus);
-      setProfiles((items) => items.map((item) => item.id === updated.id ? updated : item));
+      setProfiles((items) => replaceCustomerProfile(items, profile.id, updated));
       void onReminderChange();
     } catch (caught) { setError(caught instanceof Error ? caught.message : '档案状态更新失败'); }
     finally { setUpdatingId(''); }
@@ -57,7 +61,7 @@ export function CustomerProfilesPage({ onBack, onOpenAnalysis, onReminderChange 
     try {
       setUpdatingId(profile.id); setError('');
       const updated = await customerApi.updateFollowUp(profile.id, action);
-      setProfiles((items) => items.map((item) => item.id === updated.id ? updated : item));
+      setProfiles((items) => replaceCustomerProfile(items, profile.id, updated));
       void onReminderChange();
     } catch (caught) { setError(caught instanceof Error ? caught.message : '跟进提醒更新失败'); }
     finally { setUpdatingId(''); }
@@ -66,8 +70,8 @@ export function CustomerProfilesPage({ onBack, onOpenAnalysis, onReminderChange 
   const saveRemark = async (profile: CustomerProfile, remark: string) => {
     try {
       setUpdatingId(profile.id); setError('');
-      const updated = await customerApi.setRemark(profile.id, remark);
-      setProfiles((items) => items.map((item) => item.id === updated.id ? updated : item));
+      const updated = await customerApi.setRemark(profile.id, remark, profile.latestAnalysisId);
+      setProfiles((items) => replaceCustomerProfile(items, profile.id, updated));
     } catch (caught) { setError(caught instanceof Error ? caught.message : '客户备注保存失败'); throw caught; }
     finally { setUpdatingId(''); }
   };

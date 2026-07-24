@@ -60,7 +60,7 @@ export const customerApi = {
   reminderSummary: () => fetch('/api/v1/customers/reminders/summary', { headers }).then(parseResponse<CustomerReminderSummary>),
   updateFollowUp: (id: string, action: 'completed' | 'snooze') => fetch(`/api/v1/customers/${id}/follow-up`, { method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ action }) }).then(parseResponse<CustomerProfile>),
   setStatus: (id: string, status: CustomerDealStatus) => fetch(`/api/v1/customers/${id}/status`, { method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) }).then(parseResponse<CustomerProfile>),
-  setRemark: (id: string, remark: string) => fetch(`/api/v1/customers/${id}/remark`, { method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ remark }) }).then(parseResponse<CustomerProfile>),
+  setRemark: (id: string, remark: string, analysisId: string) => fetch(`/api/v1/customers/${id}/remark`, { method: 'PATCH', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ remark, analysisId }) }).then(parseResponse<CustomerProfile>),
 };
 
 export const reviewApi = {

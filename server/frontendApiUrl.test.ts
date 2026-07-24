@@ -16,3 +16,17 @@ test('builds frontend API URLs from the configured backend origin', () => {
     'https://api.example.test/api/v1/customers',
   );
 });
+
+test('customer remark updates include the latest analysis id', async (t) => {
+  const originalFetch = globalThis.fetch;
+  let requestBody = '';
+  globalThis.fetch = async (_input, init) => {
+    requestBody = String(init?.body ?? '');
+    return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  await analysisApi.customerApi.setRemark('stale-profile', '重点客户', 'analysis-1');
+
+  assert.deepEqual(JSON.parse(requestBody), { remark: '重点客户', analysisId: 'analysis-1' });
+});

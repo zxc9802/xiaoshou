@@ -107,11 +107,14 @@ export class AnalysisService {
     return buildCustomerProfiles(matched)[0];
   }
 
-  async setCustomerRemark(profileId: string, remark: string, actor: RequestActor) {
+  async setCustomerRemark(profileId: string, remark: string, actor: RequestActor, analysisId?: string) {
     const normalized = remark.trim();
     if (!normalized || normalized.length > 40) throw new Error('客户备注应为1至40个字符');
     const jobs = await this.repository.listJobs(actor.organizationId, 1000);
-    const matched = jobs.filter((job) => (job.customerProfileId ?? job.id) === profileId && (actor.role === 'admin' || job.createdBy === actor.userId));
+    const visible = jobs.filter((job) => actor.role === 'admin' || job.createdBy === actor.userId);
+    const anchor = analysisId ? visible.find((job) => job.id === analysisId) : undefined;
+    const resolvedProfileId = anchor?.customerProfileId ?? anchor?.id ?? profileId;
+    const matched = visible.filter((job) => (job.customerProfileId ?? job.id) === resolvedProfileId);
     if (!matched.length) throw new Error('客户档案不存在');
     const now = new Date().toISOString();
     for (const job of matched) {
@@ -119,7 +122,7 @@ export class AnalysisService {
       job.updatedAt = now;
       await this.repository.updateJob(job);
     }
-    await this.audit(actor, 'customer.remark_update', 'customer', profileId, { remark: normalized });
+    await this.audit(actor, 'customer.remark_update', 'customer', resolvedProfileId, { remark: normalized });
     return buildCustomerProfiles(matched)[0];
   }
 
