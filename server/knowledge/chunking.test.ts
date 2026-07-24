@@ -90,3 +90,20 @@ test('uses stable IDs and preserves video time metadata', () => {
   assert.deepEqual(first.timeRange, { startSeconds: 45, endSeconds: 96 });
   assert.equal(first.contentType, 'video');
 });
+
+test('does not build chunks for explicit or inferred meta knowledge', () => {
+  const explicit = entry({
+    structuredData: {
+      businessCategory: '产品资料',
+      retrievalEligible: false,
+    },
+  });
+  const inferred = entry({
+    id: '22222222-2222-4222-8222-222222222222',
+    title: '十三、智能体应生成的推荐回复',
+    content: '这里是测试题的标准答案。',
+  });
+
+  assert.deepEqual(buildKnowledgeChunks('org-a', explicit), []);
+  assert.deepEqual(buildKnowledgeChunks('org-a', inferred), []);
+});
