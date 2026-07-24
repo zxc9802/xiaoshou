@@ -31,6 +31,7 @@ import {
   serializeSsoSessionCookie,
   validateMainAppSession,
 } from './sso.js';
+import { publicRuntimeConfig } from './runtimeConfig.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -227,6 +228,8 @@ app.addHook('preHandler', async (request, reply) => {
   }
   request.ssoActor = requestActor(session);
 });
+
+app.get('/api/v1/runtime-config', async () => publicRuntimeConfig(config));
 
 const productPackageSchema = z.object({ id: z.string().optional(), name: z.string().min(1).max(100), priceDescription: z.string().max(500).optional(), applicableConditions: z.string().max(1000).optional(), effectiveFrom: z.string().optional(), effectiveTo: z.string().optional() }).transform((item) => ({ ...item, id: item.id ?? randomUUID() }));
 const productCoverSchema = z.object({ entryId: z.string().min(1), mediaId: z.string().min(1) });

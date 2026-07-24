@@ -1,4 +1,4 @@
-import type { AnalysisHistoryItem, AnalysisJob, ConversationReview, CustomerDealStatus, CustomerProfile, CustomerReminderSummary, DashboardMetrics, KnowledgeCandidate, KnowledgeEntry, KnowledgeImportContext, KnowledgeImportJob, ParsedConversation, ProductProfile, ProductProfileDetail, ProductProfileView, ProductStatus, ReviewMetrics, ReviewOutcome, SalesStyleProfile } from '../types/analysis';
+import type { AnalysisHistoryItem, AnalysisJob, ConversationReview, CustomerDealStatus, CustomerProfile, CustomerReminderSummary, DashboardMetrics, KnowledgeCandidate, KnowledgeEntry, KnowledgeImportContext, KnowledgeImportJob, ParsedConversation, ProductProfile, ProductProfileDetail, ProductProfileView, ProductStatus, ReviewMetrics, ReviewOutcome, RuntimeConfig, SalesStyleProfile } from '../types/analysis';
 import type { AnalysisRequest } from '../types/analysis';
 
 const headers = {};
@@ -53,6 +53,10 @@ export const analysisApi = {
   feedback: (id: string, outcome: 'adopted' | 'rejected' | 'edited_adopted' | 'saved_review', reason?: string) => fetch(`/api/v1/analyses/${id}/feedback`, { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ outcome, reason }) }).then(parseResponse<unknown>),
   metrics: () => fetch('/api/v1/metrics', { headers }).then(parseResponse<DashboardMetrics>),
   remove: (id: string) => fetch(`/api/v1/analyses/${id}`, { method: 'DELETE', headers }).then(parseResponse<void>),
+};
+
+export const runtimeConfigApi = {
+  get: () => fetch('/api/v1/runtime-config').then(parseResponse<RuntimeConfig>),
 };
 
 export const customerApi = {
@@ -122,7 +126,14 @@ export const profileApi = {
 
 export const ANALYSIS_STEPS = ['正在识别对话', '正在判断销售情境', '正在检索规则与资料', '正在生成销管建议'] as const;
 
-export function progressIndex(job?: AnalysisJob | null) {
+export function analysisSteps(analysisKnowledgeEnabled: boolean) {
+  return analysisKnowledgeEnabled
+    ? ANALYSIS_STEPS
+    : ['正在识别对话', '正在判断销售情境', '正在生成销管建议'] as const;
+}
+
+export function progressIndex(job?: AnalysisJob | null, analysisKnowledgeEnabled = false) {
   if (!job) return 0;
-  return ({ uploaded: 0, parsing: 0, needs_confirmation: 1, classifying: 1, retrieving: 2, generating: 3, validating: 3, completed: 3, blocked: 3, handoff: 3, canceled: 0, failed: 0 } as const)[job.status];
+  if (analysisKnowledgeEnabled) return ({ uploaded: 0, parsing: 0, needs_confirmation: 1, classifying: 1, retrieving: 2, generating: 3, validating: 3, completed: 3, blocked: 3, handoff: 3, canceled: 0, failed: 0 } as const)[job.status];
+  return ({ uploaded: 0, parsing: 0, needs_confirmation: 1, classifying: 1, retrieving: 2, generating: 2, validating: 2, completed: 2, blocked: 2, handoff: 2, canceled: 0, failed: 0 } as const)[job.status];
 }

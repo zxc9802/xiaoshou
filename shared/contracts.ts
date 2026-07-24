@@ -136,6 +136,10 @@ export interface AnalysisRequestInput {
   attachmentNames: string[];
 }
 
+export interface RuntimeConfig {
+  analysisKnowledgeEnabled: boolean;
+}
+
 export interface AnalysisJob {
   id: string;
   customerProfileId?: string;

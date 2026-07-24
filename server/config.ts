@@ -13,6 +13,7 @@ export interface AppConfig {
   databaseUrl?: string;
   objectStorageDriver: 'memory' | 'file' | 's3';
   modelDriver: 'rule_based' | 'openai_compatible';
+  analysisKnowledgeEnabled: boolean;
   modelApiStyle?: 'openai_chat' | 'gemini_generate_content';
   modelAuthMode?: 'bearer' | 'api_key_header' | 'query';
   modelBaseUrl?: string;
@@ -57,6 +58,7 @@ export function loadConfig(): AppConfig {
     databaseUrl: process.env.DATABASE_URL,
     objectStorageDriver: enumValue(process.env.OBJECT_STORAGE_DRIVER, ['memory', 'file', 's3'] as const, 'file'),
     modelDriver: enumValue(process.env.MODEL_DRIVER, ['rule_based', 'openai_compatible'] as const, 'rule_based'),
+    analysisKnowledgeEnabled: process.env.ANALYSIS_KNOWLEDGE_ENABLED === 'true',
     modelApiStyle: enumValue(process.env.MODEL_API_STYLE, ['openai_chat', 'gemini_generate_content'] as const, 'openai_chat'),
     modelAuthMode: enumValue(process.env.MODEL_AUTH_MODE, ['bearer', 'api_key_header', 'query'] as const, process.env.MODEL_API_STYLE === 'gemini_generate_content' ? 'api_key_header' : 'bearer'),
     modelBaseUrl: process.env.MODEL_BASE_URL,
