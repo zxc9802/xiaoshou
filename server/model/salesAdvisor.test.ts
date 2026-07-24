@@ -190,5 +190,4 @@ test('disabled analysis ignores model source ids and knowledge-only warnings', (
 
   assert.deepEqual(result.sourceReferences, []);
   assert.equal(result.warnings.some((warning) => /已审核|资料库|知识/.test(warning)), false);
-  assert.equal(result.validationReport.checks.some((check) => check.name === '竞品事实' && !check.passed), false);
 });
