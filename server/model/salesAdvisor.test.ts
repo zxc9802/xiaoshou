@@ -5,6 +5,7 @@ import { DEFAULT_KNOWLEDGE } from '../knowledge/defaults.js';
 import { analyzeWithRules } from '../rules/analysisEngine.js';
 import { parseConversationText } from './conversationParser.js';
 import { applyModelAdvice, parseModelSalesAdvice, type ModelSalesAdvice } from './salesAdvisor.js';
+import * as salesAdvisor from './salesAdvisor.js';
 
 function advice(sourceIds: string[]): ModelSalesAdvice {
   return {
@@ -147,4 +148,47 @@ test('empty model loop fields fall back to the local safety analysis', () => {
   assert.equal(parsed.salesLoopIssue.type, baseline.salesLoopIssue.type);
   assert.equal(parsed.salesLoopIssue.problem, baseline.salesLoopIssue.problem);
   assert.equal(parsed.salesLoopIssue.reason, baseline.salesLoopIssue.reason);
+});
+
+test('disabled analysis prompt omits knowledge content and citation instructions', () => {
+  const buildSalesAdvicePrompt = (salesAdvisor as { buildSalesAdvicePrompt?: (...args: any[]) => string }).buildSalesAdvicePrompt;
+  assert.ok(buildSalesAdvicePrompt, 'buildSalesAdvicePrompt must expose both prompt modes');
+  const transcript = parseConversationText('客户：课程能解决什么问题？');
+  const baseline = analyzeWithRules(transcript, []);
+  const source = { ...DEFAULT_KNOWLEDGE[0]!, id: 'sentinel-source', content: 'SENTINEL_KNOWLEDGE_CONTENT' };
+  const prompt = buildSalesAdvicePrompt(baseline, transcript, [source], { conversation: '课程咨询', attachmentNames: [] }, false);
+
+  assert.doesNotMatch(prompt, /SENTINEL_KNOWLEDGE_CONTENT/);
+  assert.doesNotMatch(prompt, /已审核知识/);
+  assert.doesNotMatch(prompt, /sourceIds/);
+});
+
+test('enabled analysis prompt retains knowledge content and citation instructions', () => {
+  const buildSalesAdvicePrompt = (salesAdvisor as { buildSalesAdvicePrompt?: (...args: any[]) => string }).buildSalesAdvicePrompt;
+  assert.ok(buildSalesAdvicePrompt, 'buildSalesAdvicePrompt must expose both prompt modes');
+  const transcript = parseConversationText('客户：课程能解决什么问题？');
+  const baseline = analyzeWithRules(transcript, []);
+  const source = { ...DEFAULT_KNOWLEDGE[0]!, id: 'sentinel-source', content: 'SENTINEL_KNOWLEDGE_CONTENT' };
+  const prompt = buildSalesAdvicePrompt(baseline, transcript, [source], { conversation: '课程咨询', attachmentNames: [] }, true);
+
+  assert.match(prompt, /SENTINEL_KNOWLEDGE_CONTENT/);
+  assert.match(prompt, /已审核知识/);
+  assert.match(prompt, /sourceIds/);
+});
+
+test('disabled analysis ignores model source ids and knowledge-only warnings', () => {
+  const transcript = parseConversationText('客户：网上免费课程是不是都没用？');
+  const baseline = analyzeWithRules(transcript, []);
+  const result = applyModelAdvice(
+    baseline,
+    { ...advice(['missing-source']), recommendedReply: '可以先说说您最希望解决的业务问题吗？' },
+    transcript,
+    DEFAULT_KNOWLEDGE,
+    'gpt-test',
+    false,
+  );
+
+  assert.deepEqual(result.sourceReferences, []);
+  assert.equal(result.warnings.some((warning) => /已审核|资料库|知识/.test(warning)), false);
+  assert.equal(result.validationReport.checks.some((check) => check.name === '竞品事实' && !check.passed), false);
 });

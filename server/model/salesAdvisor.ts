@@ -41,7 +41,7 @@ const adviceSchema = z.object({
     nextAction: z.string().min(1).max(400),
     suggestedLine: z.string().max(500).optional(),
   })).min(1).max(4),
-  sourceIds: z.array(z.string()).max(12),
+  sourceIds: z.array(z.string()).max(12).default([]),
 });
 
 export type ModelSalesAdvice = z.infer<typeof adviceSchema>;
@@ -148,38 +148,52 @@ function lineLimit(value: string) {
   return value.split(/\n+/).map((line) => line.trim()).filter(Boolean).slice(0, 4).join('\n');
 }
 
-function buildPrompt(baseline: SalesAnalysisResult, transcript: ParsedConversation, knowledge: KnowledgeEntry[], request: AnalysisRequestInput) {
-  const facts = publishedKnowledge(knowledge).map((entry) => ({ id: entry.id, layer: entry.layer, category: entry.category, title: entry.title, version: entry.version, content: entry.content.slice(0, 2500) }));
-  return `你是以合规成交为目标的企业AI销管教练，不是被动客服。请基于完整客户对话、规则判断和已审核知识，帮助销售恢复信任、化解异议并推进一个客户愿意接受的下一步。你不能自动发送消息。所有必填字符串字段都必须填写有意义的内容，不得返回空字符串。
+export function buildSalesAdvicePrompt(
+  baseline: SalesAnalysisResult,
+  transcript: ParsedConversation,
+  knowledge: KnowledgeEntry[],
+  request: AnalysisRequestInput,
+  analysisKnowledgeEnabled: boolean,
+) {
+  const facts = analysisKnowledgeEnabled
+    ? publishedKnowledge(knowledge).map((entry) => ({ id: entry.id, layer: entry.layer, category: entry.category, title: entry.title, version: entry.version, content: entry.content.slice(0, 2500) }))
+    : [];
+  const analysisBasis = analysisKnowledgeEnabled ? '完整客户对话、规则判断和已审核知识' : '完整客户对话和规则判断';
+  const knowledgeRules = analysisKnowledgeEnabled
+    ? `企业事实只能来自“已审核知识”；没有依据时明确说需要核实，不得编造价格、优惠、课程内容、效果、案例或服务承诺。
+sourceIds只能填写下方已审核知识中确实支持本次建议的id；没有引用则返回空数组。
+不得承诺发送、提供或展示资料库中不存在的案例、方案、报告、清单或其他材料。`
+    : '不要假装掌握对话和补充背景中未提供的企业价格、优惠、案例、效果或服务承诺；需要具体企业事实时，建议销售向负责人核实。';
+  const valueReframe = analysisKnowledgeEnabled ? '基于已审核事实重构价值' : '基于对话中的已知事实重构价值';
+  const knowledgeBlock = analysisKnowledgeEnabled ? `\n已审核知识：\n${JSON.stringify(facts)}\n` : '';
+  const sourceField = analysisKnowledgeEnabled ? ',"sourceIds":[]' : '';
+  return `你是以合规成交为目标的企业AI销管教练，不是被动客服。请基于${analysisBasis}，帮助销售恢复信任、化解异议并推进一个客户愿意接受的下一步。你不能自动发送消息。所有必填字符串字段都必须填写有意义的内容，不得返回空字符串。
 
 必须遵守：
-1. 企业事实只能来自“已审核知识”；没有依据时明确说需要核实，使用【待补充：具体事项】，不得编造价格、优惠、课程内容、效果、案例或服务承诺。
+1. ${knowledgeRules}
 2. 推荐回复不超过4行，一次只推进一个主要目标，必须包含提问、二选一或明确时间约定。
 3. 深层需求只能作为假设，必须给出置信度、依据和验证问题。
 4. 客户连续明确拒绝至少2次时，只允许得体收尾，不再推课；投诉、退款、合同争议或大额承诺时，只允许缓冲并升级人工。
-5. 不攻击竞品，不制造稀缺，不保证效果，不复述隐私信息。没有竞品口径来源时，不得断言免费课程、其他机构或其他产品“通常、多为、都是、只能、不能”等特征；应改为询问客户已经看过什么以及最关心什么。
-6. sourceIds只能填写下方已审核知识中确实支持本次建议的id；没有引用则返回空数组。
-7. 不得承诺发送、提供或展示资料库中不存在的案例、方案、报告、清单或其他材料；避免使用“确保落地、保证落地、一定有效”等结果承诺。
-8. 每轮必须先选择一个主要销售策略，并说明选择原因。除连续明确拒绝或高风险场景外，推荐回复按“承接真实顾虑→直接回应问题→基于已审核事实重构价值→降低决策压力→推进一个低门槛动作”组织，但表达要自然，不能像话术模板。
-9. 以成交为长期目标，但本轮只推进一个微承诺，例如说出真实顾虑、确认使用场景、查看一项证据、接受演示或约定复聊时间；不得一上来逼付款或反复询问客户已经回答过的问题。
-10. 对价格、效果、信任异议，先回应客户“怕不值、怕无效、怕踩坑”的决策风险，再介绍事实；可以使用反向筛选和“先不急着买”降低防备，但不能虚构试用、退款或保障政策。
+5. 不攻击竞品，不制造稀缺，不保证效果，不复述隐私信息。不得无依据断言免费课程、其他机构或其他产品“通常、多为、都是、只能、不能”等特征；应改为询问客户已经看过什么以及最关心什么。
+6. 避免使用“确保落地、保证落地、一定有效”等结果承诺。
+7. 每轮必须先选择一个主要销售策略，并说明选择原因。除连续明确拒绝或高风险场景外，推荐回复按“承接真实顾虑→直接回应问题→${valueReframe}→降低决策压力→推进一个低门槛动作”组织，但表达要自然，不能像话术模板。
+8. 以成交为长期目标，但本轮只推进一个微承诺，例如说出真实顾虑、确认使用场景、查看一项证据、接受演示或约定复聊时间；不得一上来逼付款或反复询问客户已经回答过的问题。
+9. 对价格、效果、信任异议，先回应客户“怕不值、怕无效、怕踩坑”的决策风险，再介绍事实；可以使用反向筛选和“先不急着买”降低防备，但不能虚构试用、退款或保障政策。
 
 关联产品：${request.product ?? '未指定'}
 补充背景：${request.customerBackground ?? '无'}
 本地安全分类：${JSON.stringify({ deadlockType: baseline.deadlockType, intentTemperature: baseline.intentTemperature, decisionStage: baseline.decisionStage, objectionType: baseline.objectionType, riskLevel: baseline.riskLevel, handoffRequired: baseline.handoffRequired })}
 完整对话：
 ${transcriptText(transcript)}
-
-已审核知识：
-${JSON.stringify(facts)}
+${knowledgeBlock}
 
 stage只能填写：初步了解、有兴趣在比较、犹豫权衡、接近成交、流失边缘。置信度统一填写0到100的整数。
-只返回JSON：{"situationAnalysis":"","salesStrategy":{"name":"主要策略名称","reason":"为什么适合当前客户","conversionGoal":"本轮要推动的一个微承诺","techniques":["承接顾虑","价值重构"]},"followupAction":"","stage":"初步了解","stageEvidence":"","stageConfidence":80,"explicitNeeds":[""],"implicitNeedHypotheses":[{"statement":"假设：...","confidence":70,"evidence":"","validationQuestion":""}],"salesLoopIssue":{"type":"","problem":"","reason":""},"replyGoal":"","recommendedReply":"最多4行","alternativeReplies":[{"tone":"简洁","content":""},{"tone":"柔和","content":""},{"tone":"更有推进感","content":""}],"nextBranches":[{"customerReply":"","nextAction":"","suggestedLine":""}],"sourceIds":[""]}`;
+只返回JSON：{"situationAnalysis":"","salesStrategy":{"name":"主要策略名称","reason":"为什么适合当前客户","conversionGoal":"本轮要推动的一个微承诺","techniques":["承接顾虑","价值重构"]},"followupAction":"","stage":"初步了解","stageEvidence":"","stageConfidence":80,"explicitNeeds":[""],"implicitNeedHypotheses":[{"statement":"假设：...","confidence":70,"evidence":"","validationQuestion":""}],"salesLoopIssue":{"type":"","problem":"","reason":""},"replyGoal":"","recommendedReply":"最多4行","alternativeReplies":[{"tone":"简洁","content":""},{"tone":"柔和","content":""},{"tone":"更有推进感","content":""}],"nextBranches":[{"customerReply":"","nextAction":"","suggestedLine":""}]${sourceField}}`;
 }
 
-export function applyModelAdvice(baseline: SalesAnalysisResult, advice: ModelSalesAdvice, transcript: ParsedConversation, knowledge: KnowledgeEntry[], modelName: string): SalesAnalysisResult {
+export function applyModelAdvice(baseline: SalesAnalysisResult, advice: ModelSalesAdvice, transcript: ParsedConversation, knowledge: KnowledgeEntry[], modelName: string, analysisKnowledgeEnabled = true): SalesAnalysisResult {
   const recommendedReply = lineLimit(advice.recommendedReply);
-  const evidence = selectEvidenceEntries(advice.sourceIds, knowledge, recommendedReply);
+  const evidence = selectEvidenceEntries(advice.sourceIds, analysisKnowledgeEnabled ? knowledge : [], recommendedReply);
   const selectedSources = evidence.entries.map((entry) => ({
     id: entry.id,
     category: sourceCategory(entry),
@@ -190,7 +204,8 @@ export function applyModelAdvice(baseline: SalesAnalysisResult, advice: ModelSal
   }));
   const hasPublishedFacts = evidence.factsGrounded
     && evidence.entries.some((entry) => isFactualSource(entry));
-  const noReliableFactsWarning = hasPublishedFacts ? [] : ['本次AI回复未引用已审核的产品、价格或案例事实，请勿对客户作确定承诺。'];
+  const noReliableFactsWarning = analysisKnowledgeEnabled && !hasPublishedFacts ? ['本次AI回复未引用已审核的产品、价格或案例事实，请勿对客户作确定承诺。'] : [];
+  const baselineWarnings = analysisKnowledgeEnabled ? baseline.warnings : baseline.warnings.filter((warning) => !/已审核|资料库|知识/.test(warning));
   return {
     ...baseline,
     ...advice,
@@ -200,13 +215,13 @@ export function applyModelAdvice(baseline: SalesAnalysisResult, advice: ModelSal
     salesLoopIssue: advice.salesLoopIssue.type.toLowerCase() === 'none' ? { ...advice.salesLoopIssue, type: '暂无明显死循环' } : advice.salesLoopIssue,
     alternativeReplies: advice.alternativeReplies.map((reply) => ({ ...reply, content: lineLimit(reply.content) })),
     sourceReferences: selectedSources,
-    warnings: [...new Set([...baseline.warnings, ...noReliableFactsWarning])],
+    warnings: [...new Set([...baselineWarnings, ...noReliableFactsWarning])],
   };
 }
 
 export async function generateSalesAdvice(config: AppConfig, baseline: SalesAnalysisResult, transcript: ParsedConversation, knowledge: KnowledgeEntry[], request: AnalysisRequestInput) {
   if (config.modelDriver !== 'openai_compatible' || !config.modelName) throw new Error('真实AI销售建议未配置可用模型');
-  const raw = await generateJsonText(config, { model: config.modelName, prompt: buildPrompt(baseline, transcript, knowledge, request), timeoutMs: 45_000 });
+  const raw = await generateJsonText(config, { model: config.modelName, prompt: buildSalesAdvicePrompt(baseline, transcript, knowledge, request, config.analysisKnowledgeEnabled), timeoutMs: 45_000 });
   const advice = parseModelSalesAdvice(raw, baseline);
-  return applyModelAdvice(baseline, advice, transcript, knowledge, config.modelName);
+  return applyModelAdvice(baseline, advice, transcript, knowledge, config.modelName, config.analysisKnowledgeEnabled);
 }
