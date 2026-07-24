@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { KnowledgeCandidate, KnowledgeEntry, KnowledgeImportContext, KnowledgeImportJob, KnowledgeMediaAsset, ProductPackage, ProductProfileDetail, ProductProfileView } from '../types/analysis';
 import { knowledgeApi, productApi } from '../services/analysisApi';
 import { CheckIcon, PlusIcon, ShieldIcon, UploadIcon } from './Icons';
+import { buildReviewImportOptions } from './knowledgeReviewQueue';
 
 const defaultBusinessCategories = ['产品资料', '客户案例', '竞品口径', '售后承诺', '禁用红线', '销售技巧'] as const;
 const blockedPattern = /\.(exe|dll|msi|bat|cmd|com|scr|ps1|sh|vbs|js|jar)$/i;
@@ -548,6 +549,11 @@ function ImportReviewModal({ job, imports, products, businessCategories, onSelec
   const approvedCount = candidates.filter((candidate) => candidate.reviewStatus !== 'discarded').length;
   const revisionRoot = job.parentImportId ?? job.id;
   const relatedVersions = imports.filter((item) => item.id === revisionRoot || item.parentImportId === revisionRoot).sort((a, b) => (a.revisionNumber ?? 1) - (b.revisionNumber ?? 1));
+  const reviewImportOptions = buildReviewImportOptions(imports);
+  const selectedReviewImportId = reviewImportOptions.find((option) => {
+    const item = imports.find((entry) => entry.id === option.id);
+    return item && (item.parentImportId ?? item.id) === revisionRoot;
+  })?.id ?? reviewImportOptions[0]?.id ?? '';
   const sectionById = new Map((job.documentSections ?? []).map((section) => [section.id, section]));
 
   const patchCandidate = (id: string, patch: Partial<KnowledgeCandidate>) => {
@@ -589,6 +595,11 @@ function ImportReviewModal({ job, imports, products, businessCategories, onSelec
       </header>
       {error && <div className="workspace-error">{error}</div>}
       <div className="import-coverage-summary">
+        <label>待确认批次
+          <select value={selectedReviewImportId} onChange={(event) => { const selected = imports.find((item) => item.id === event.target.value); if (selected) onSelectJob(selected); }}>
+            {reviewImportOptions.map((option) => <option value={option.id} key={option.id}>{option.label}</option>)}
+          </select>
+        </label>
         <label>解析版本
           <select value={job.id} onChange={(event) => { const selected = relatedVersions.find((item) => item.id === event.target.value); if (selected) onSelectJob(selected); }}>
             {relatedVersions.map((item) => <option value={item.id} key={item.id}>版本 {item.revisionNumber ?? 1} · {item.status}</option>)}
