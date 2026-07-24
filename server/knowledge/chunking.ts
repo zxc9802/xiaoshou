@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { extname } from 'node:path';
 import type { KnowledgeEntry } from '../../shared/contracts.js';
 import { formatRetrievalDocument } from '../model/embeddings.js';
+import { isKnowledgeRetrievalEligible } from './eligibility.js';
 
 export type KnowledgeContentType =
   | 'document'
@@ -151,7 +152,10 @@ function splitChat(content: string) {
 }
 
 export function buildKnowledgeChunks(organizationId: string, entry: KnowledgeEntry): KnowledgeChunk[] {
-  if ((entry.layer !== 'L2' && entry.layer !== 'L3') || entry.status !== 'published' || entry.deletedAt) return [];
+  if ((entry.layer !== 'L2' && entry.layer !== 'L3')
+    || entry.status !== 'published'
+    || entry.deletedAt
+    || !isKnowledgeRetrievalEligible(entry)) return [];
   const contentType = detectContentType(entry);
   const content = clean(entry.content);
   const parts = contentType === 'table'
