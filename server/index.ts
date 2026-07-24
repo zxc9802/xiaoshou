@@ -1,13 +1,13 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { extname } from 'node:path';
 import Fastify, { type FastifyRequest } from 'fastify';
-import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import { unzipSync } from 'fflate';
 import { z } from 'zod';
 import type { AnalysisRequestInput, KnowledgeCandidate, KnowledgeImportContext, ParsedConversation } from '../shared/contracts.js';
 import { AnalysisService } from './analysisService.js';
 import { loadConfig } from './config.js';
+import { registerCors } from './cors.js';
 import type { ObjectStorage, Repository, RequestActor, StoredAnalysisJob } from './domain.js';
 import { MemoryRepository } from './infrastructure/memoryRepository.js';
 import { FileRepository } from './infrastructure/fileRepository.js';
@@ -76,7 +76,7 @@ if (config.workerMode === 'inline') {
 }
 
 const app = Fastify({ logger: true, bodyLimit: Math.max(90, config.knowledgeImportMaxTotalMb + 10) * 1024 * 1024 });
-await app.register(cors, { origin: config.corsOrigin, credentials: true });
+await registerCors(app, config.corsOrigin);
 await app.register(multipart, { limits: { files: 50, fileSize: 25 * 1024 * 1024, parts: 80 } });
 
 function actor(request: FastifyRequest) {
