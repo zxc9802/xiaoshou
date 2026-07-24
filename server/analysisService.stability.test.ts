@@ -32,6 +32,15 @@ test('analysis completes without entering the removed validation stage', async (
   assert.equal(repository.updatedStatuses.includes('blocked'), false);
 });
 
+class CountingRepository extends MemoryRepository {
+  knowledgeReads = 0;
+
+  override async listKnowledge(organizationId: string) {
+    this.knowledgeReads += 1;
+    return super.listKnowledge(organizationId);
+  }
+}
+
 test('an analysis can be canceled and safely requeued', async () => {
   const repository = new MemoryRepository();
   const service = new AnalysisService(repository, new MemoryObjectStorage(), new RuleBasedConversationParser(), config);
@@ -101,4 +110,35 @@ test('editing a customer remark follows the latest analysis after a profile merg
 
   assert.equal(updated.id, 'merged-profile');
   assert.equal((await repository.getJob(created.id))?.customerManualRemark, '合并后的客户');
+});
+
+test('disabled analysis completes without reading the knowledge repository', async () => {
+  const repository = new CountingRepository();
+  const service = new AnalysisService(
+    repository,
+    new MemoryObjectStorage(),
+    new RuleBasedConversationParser(),
+    { ...config, analysisKnowledgeEnabled: false },
+  );
+  const created = await service.create({ conversation: '客户：价格有点高\n销售：您更担心预算还是实际价值？', attachmentNames: [] }, [], actor);
+
+  assert.equal(await service.processPending(), true);
+  const completed = await repository.getJob(created.id);
+  assert.equal(repository.knowledgeReads, 0);
+  assert.equal(completed?.status, 'completed');
+  assert.deepEqual(completed?.result?.sourceReferences, []);
+});
+
+test('enabled analysis retains knowledge repository retrieval', async () => {
+  const repository = new CountingRepository();
+  const service = new AnalysisService(
+    repository,
+    new MemoryObjectStorage(),
+    new RuleBasedConversationParser(),
+    { ...config, analysisKnowledgeEnabled: true },
+  );
+  await service.create({ conversation: '客户：价格有点高\n销售：您更担心预算还是实际价值？', attachmentNames: [] }, [], actor);
+
+  assert.equal(await service.processPending(), true);
+  assert.equal(repository.knowledgeReads, 1);
 });

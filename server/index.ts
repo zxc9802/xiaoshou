@@ -60,7 +60,7 @@ try {
 const analyses = new AnalysisService(repository, storage, parser, config, vectorIndex);
 const knowledge = new KnowledgeService(repository, storage, config, knowledgeIndexer);
 const products = new ProductService(repository, storage);
-const reviews = new ReviewService(repository);
+const reviews = new ReviewService(repository, config.analysisKnowledgeEnabled);
 
 await knowledge.initializeKnowledge('default-org');
 await products.initialize('default-org');

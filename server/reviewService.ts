@@ -29,7 +29,10 @@ function latestFeedback(records: FeedbackRecord[], analysisId: string) {
 }
 
 export class ReviewService {
-  constructor(private readonly repository: Repository) {}
+  constructor(
+    private readonly repository: Repository,
+    private readonly analysisKnowledgeEnabled = false,
+  ) {}
 
   private async synchronize(actor: RequestActor) {
     const [jobs, feedback, existing] = await Promise.all([
@@ -81,7 +84,9 @@ export class ReviewService {
           diagnosis: current?.diagnosis ?? [],
           note: current?.note,
           riskLevel: before.result.riskLevel,
-          knowledgeGap: before.result.sourceReferences.filter((source) => source.verified).length === 0,
+          knowledgeGap: this.analysisKnowledgeEnabled
+            ? before.result.sourceReferences.filter((source) => source.verified).length === 0
+            : current?.knowledgeGap ?? false,
           knowledgeCandidateId: current?.knowledgeCandidateId,
           createdAt: current?.createdAt ?? before.createdAt,
           updatedAt: now,
@@ -148,7 +153,7 @@ export class ReviewService {
       effectiveProgressRate: confirmed.length ? Math.round(effective.length / confirmed.length * 100) : 0,
       rescuedCustomers: rescued.size,
       adoptionRate: feedback.length ? Math.round(adopted.length / feedback.length * 100) : 0,
-      knowledgeGapCount: reviews.filter((review) => review.knowledgeGap).length,
+      knowledgeGapCount: this.analysisKnowledgeEnabled ? reviews.filter((review) => review.knowledgeGap).length : 0,
       totalReviews: reviews.length,
     };
   }

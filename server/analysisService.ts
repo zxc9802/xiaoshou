@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { ClarificationQuestion, CustomerDealStatus, CustomerProfile, ParsedConversation } from '../shared/contracts.js';
+import type { ClarificationQuestion, CustomerDealStatus, CustomerProfile, KnowledgeEntry, ParsedConversation } from '../shared/contracts.js';
 import type { AnalysisRequestInput } from '../shared/contracts.js';
 import type { AppConfig } from './config.js';
 import type { FeedbackRecord, ObjectStorage, Repository, RequestActor, StoredAnalysisJob, StoredAttachment } from './domain.js';
@@ -284,15 +284,19 @@ export class AnalysisService {
       const job = await this.requireAnyJob(id);
       if (!job.transcript) throw new Error('Transcript is missing');
       await this.save(job, 'classifying', 46, '正在判断僵局、意向与阶段'); await pause(120);
-      await this.save(job, 'retrieving', 62, '正在按L0-L4检索规则与资料');
-      const allKnowledge = await this.repository.listKnowledge(job.organizationId);
       const localClassification = analyzeWithRules(job.transcript, [], job.clarificationQuestions, job.createdBy);
-      const knowledge = await retrieveKnowledge(allKnowledge, `${job.request.product ?? ''}\n${job.request.conversation}\n${job.transcript.lastMessage}\n销售情境：${localClassification.deadlockType}；异议：${localClassification.objectionType}；阶段：${localClassification.decisionStage}；目标：成交推进`, this.config, {
-        organizationId: job.organizationId,
-        ownerId: job.createdBy,
-        vectorIndex: this.vectorIndex,
-      }); await pause(120);
-      await this.save(job, 'generating', 78, '正在生成回复与后续动作');
+      let knowledge: KnowledgeEntry[] = [];
+      if (this.config.analysisKnowledgeEnabled) {
+        await this.save(job, 'retrieving', 62, '正在按L0-L4检索规则与资料');
+        const allKnowledge = await this.repository.listKnowledge(job.organizationId);
+        knowledge = await retrieveKnowledge(allKnowledge, `${job.request.product ?? ''}\n${job.request.conversation}\n${job.transcript.lastMessage}\n销售情境：${localClassification.deadlockType}；异议：${localClassification.objectionType}；阶段：${localClassification.decisionStage}；目标：成交推进`, this.config, {
+          organizationId: job.organizationId,
+          ownerId: job.createdBy,
+          vectorIndex: this.vectorIndex,
+        });
+        await pause(120);
+      }
+      await this.save(job, 'generating', 78, this.config.analysisKnowledgeEnabled ? '正在生成回复与后续动作' : '正在使用AI生成销管建议');
       const baseline = analyzeWithRules(job.transcript, knowledge, job.clarificationQuestions, job.createdBy);
       const result = this.config.modelDriver === 'openai_compatible'
         ? await generateSalesAdvice(this.config, baseline, job.transcript, knowledge, job.request)

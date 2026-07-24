@@ -58,3 +58,16 @@ test('only effective confirmed reviews can become knowledge candidates', async (
   assert.equal(knowledge?.status, 'in_review');
   assert.equal(knowledge?.structuredData?.businessCategory, '销售技巧');
 });
+
+test('disabled analysis creates no knowledge gap and reports zero gap metrics', async () => {
+  const repository = new MemoryRepository();
+  const first = job('analysis-1', '2026-07-20T10:00:00.000Z', '客户：价格有点高\n销售：我了解一下');
+  first.result!.sourceReferences = [];
+  await repository.createJob(first);
+  await repository.addFeedback({ id: 'feedback-gap', analysisId: first.id, userId: actor.userId, outcome: 'adopted', createdAt: '2026-07-20T11:00:00.000Z' });
+  const service = new ReviewService(repository, false);
+
+  const [review] = await service.list(actor);
+  assert.equal(review?.knowledgeGap, false);
+  assert.equal((await service.metrics(actor)).knowledgeGapCount, 0);
+});
