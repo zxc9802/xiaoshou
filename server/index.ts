@@ -25,6 +25,7 @@ import {
   createSsoSessionCookie,
   exchangeMainAppSsoTicket,
   getPublicAppUrl,
+  getSsoSessionCookieMaxAge,
   readSsoSessionFromRequest,
   requestActor,
   serializeSsoSessionCookie,
@@ -205,7 +206,7 @@ app.get('/api/sso/callback', async (request, reply) => {
     const { redirectPath, session } = await exchangeMainAppSsoTicket(ticket);
     const cookie = createSsoSessionCookie(session);
     return reply
-      .header('Set-Cookie', serializeSsoSessionCookie(cookie.value))
+      .header('Set-Cookie', serializeSsoSessionCookie(cookie.value, getSsoSessionCookieMaxAge(session.expiresAt)))
       .redirect(new URL(redirectPath, getPublicAppUrl()).toString());
   } catch {
     return reply.code(401).send({ message: '主站 SSO 换票失败' });

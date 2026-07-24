@@ -4,7 +4,6 @@ import type { RequestActor } from './domain.js';
 
 const PRODUCT = 'xiaoshou';
 const COOKIE_NAME = 'qycm_xiaoshou_sso';
-const SESSION_MAX_AGE_SECONDS = 5 * 60;
 const MAIN_APP_URL_FALLBACK = 'https://www.qycm.top';
 const PUBLIC_APP_URL_FALLBACK = 'https://xiaoshou.qycm.top';
 
@@ -27,6 +26,7 @@ type ExchangeResponse = {
     token?: unknown;
     redirectPath?: unknown;
     user?: unknown;
+    expiresAt?: unknown;
   };
 };
 
@@ -54,6 +54,10 @@ function isSession(value: unknown): value is SsoSession {
     && typeof session.expiresAt === 'number'
     && Number.isFinite(session.expiresAt)
     && session.expiresAt > Date.now();
+}
+
+function isFutureExpiration(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > Date.now();
 }
 
 export function getMainAppUrl(): string {
@@ -119,7 +123,11 @@ export function readSsoSessionFromRequest(request: FastifyRequest): SsoSession |
   }
 }
 
-export function serializeSsoSessionCookie(value: string, maxAge = SESSION_MAX_AGE_SECONDS): string {
+export function getSsoSessionCookieMaxAge(expiresAt: number): number {
+  return Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+}
+
+export function serializeSsoSessionCookie(value: string, maxAge = 0): string {
   return `${COOKIE_NAME}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`;
 }
 
@@ -146,13 +154,14 @@ export async function exchangeMainAppSsoTicket(ticket: string): Promise<{
   const payload = await response.json().catch(() => ({})) as ExchangeResponse;
   const token = payload.data?.token;
   const user = payload.data?.user;
-  if (!response.ok || !payload.success || typeof token !== 'string' || !isMainAppUser(user)) {
+  const expiresAt = payload.data?.expiresAt;
+  if (!response.ok || !payload.success || typeof token !== 'string' || !isMainAppUser(user) || !isFutureExpiration(expiresAt)) {
     throw new Error('Main-site SSO exchange was rejected.');
   }
 
   return {
     redirectPath: safeRedirectPath(payload.data?.redirectPath),
-    session: { token, user, expiresAt: Date.now() + (SESSION_MAX_AGE_SECONDS * 1000) },
+    session: { token, user, expiresAt },
   };
 }
 
