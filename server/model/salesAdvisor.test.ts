@@ -62,7 +62,7 @@ test('published L2 price knowledge is treated as factual price evidence before t
   }, transcript, knowledge, 'gemini-test');
 
   assert.equal(result.sourceReferences[0]?.category, '价格政策');
-  assert.equal(result.validationReport.passed, true);
+  assert.equal(result.warnings.some((warning) => warning.includes('未引用已审核')), false);
 });
 
 test('model advice recovers a matching published source from the current retrieval result', () => {
@@ -83,10 +83,10 @@ test('model advice recovers a matching published source from the current retriev
   }, transcript, knowledge, 'gemini-test');
 
   assert.equal(result.sourceReferences.some((item) => item.id === source.id), true);
-  assert.equal(result.validationReport.passed, true);
+  assert.equal(result.warnings.some((warning) => warning.includes('未引用已审核')), false);
 });
 
-test('model advice stays blocked when a cited source does not contain every concrete fact', () => {
+test('model advice warns when a cited source does not contain every concrete fact', () => {
   const transcript = parseConversationText('客户：企业版一年多少钱？\n销售：我查一下');
   const source = knowledgeSource({
     id: 'approved-enterprise-price',
@@ -103,8 +103,9 @@ test('model advice stays blocked when a cited source does not contain every conc
     recommendedReply: '理解您的预算顾虑。企业版年费为39,800元，最多80个销售席位，标准交付为10个工作日，您看可以吗？',
   }, transcript, knowledge, 'gemini-test');
 
-  assert.equal(result.validationReport.passed, false);
-  assert.equal(result.validationReport.checks.find((check) => check.name === '事实依据')?.passed, false);
+  assert.equal(result.sourceReferences[0]?.id, source.id);
+  assert.equal(result.warnings.some((warning) => warning.includes('未引用已审核')), true);
+  assert.equal('validationReport' in result, false);
 });
 
 test('model advice replaces local reply and records the real generation mode', () => {
@@ -118,7 +119,6 @@ test('model advice replaces local reply and records the real generation mode', (
   assert.equal(result.generationModel, 'gemini-test');
   assert.match(result.recommendedReply, /课程能否真正用于业务/);
   assert.equal(result.sourceReferences[0]?.id, source.id);
-  assert.equal(result.validationReport.passed, true);
 });
 
 test('model advice cannot cite unknown knowledge entries', () => {
@@ -126,16 +126,16 @@ test('model advice cannot cite unknown knowledge entries', () => {
   const baseline = analyzeWithRules(transcript, DEFAULT_KNOWLEDGE);
   const result = applyModelAdvice(baseline, { ...advice(['missing-source']), recommendedReply: '这个课程效果很好，您现在报名可以吗？' }, transcript, DEFAULT_KNOWLEDGE, 'gemini-test');
   assert.equal(result.sourceReferences.length, 0);
-  assert.equal(result.validationReport.passed, false);
-  assert.ok(result.validationReport.unsupportedFacts.length > 0);
+  assert.equal(result.warnings.some((warning) => warning.includes('未引用已审核')), true);
+  assert.equal('validationReport' in result, false);
 });
 
-test('model advice cannot assert competitor characteristics without an approved competitor source', () => {
+test('model advice is no longer blocked by a final competitor compliance gate', () => {
   const transcript = parseConversationText('客户：网上有很多免费课程\n销售：我了解一下');
   const baseline = analyzeWithRules(transcript, DEFAULT_KNOWLEDGE);
   const result = applyModelAdvice(baseline, { ...advice([]), recommendedReply: '网上免费课程通常都不能落地，您报名我们的课程可以吗？' }, transcript, DEFAULT_KNOWLEDGE, 'gemini-test');
-  assert.equal(result.validationReport.passed, false);
-  assert.equal(result.validationReport.checks.find((check) => check.name === '竞品事实')?.passed, false);
+  assert.match(result.recommendedReply, /网上免费课程/);
+  assert.equal('validationReport' in result, false);
 });
 
 test('empty model loop fields fall back to the local safety analysis', () => {

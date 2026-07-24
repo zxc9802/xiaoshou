@@ -15,7 +15,6 @@ export function SalesCoachResult({ result, embedded = false, jobStatus, analysis
   return (
     <section className={`result-card${embedded ? ' embedded-result' : ''}`}>
       {(jobStatus === 'handoff' || result.handoffRequired) && <div className="result-risk-banner high"><strong>建议升级人工处理</strong><span>该场景涉及合同、退款、投诉或大额承诺，AI仅提供缓冲话术。</span></div>}
-      {jobStatus === 'blocked' && <div className="result-risk-banner blocked"><strong>普通回复已被阻止</strong><span>事实或合规校验未通过，请补充已审核资料后重试。</span></div>}
       {!embedded && <header className="result-header"><div><span className="result-kicker"><SparkIcon /> AI 销管建议</span><h2>建议这样回复客户</h2><p>建议先确认客户真实顾虑，再推进下一步</p></div><span className="complete-badge">{result.generationMode === 'ai' ? '真实AI生成' : '规则分析'}</span></header>}
       <div className="reply-priority">
         <div className="situation-summary"><span>局面分析</span><p>{result.situationAnalysis}</p><div><em>{result.deadlockType}</em><em>{result.intentTemperature}</em><em>{result.decisionStage}</em><em>{result.objectionType}</em></div></div>
@@ -34,7 +33,7 @@ export function SalesCoachResult({ result, embedded = false, jobStatus, analysis
           <TextFlowStep number="04" title="销售陷入死循环的原因"><div className="loop-type">{result.salesLoopIssue.type}</div><p className="body-copy">{result.salesLoopIssue.problem}</p><div className="why-box"><span>为什么无法继续推进</span><p>{result.salesLoopIssue.reason}</p></div></TextFlowStep>
           <TextFlowStep number="05" title="本轮沟通目标"><div className="goal-box"><span>唯一目标</span><strong>{result.replyGoal}</strong></div></TextFlowStep>
           <TextFlowStep number="06" title="客户可能回应及下一步"><NextActionList branches={result.nextBranches} /></TextFlowStep>
-          <TextFlowStep number="07" title="依据来源和风险提醒" last><SourceReferenceList sources={result.sourceReferences} warnings={result.warnings} /><details className="validation-details"><summary>查看生成前校验结果</summary>{result.validationReport.checks.map((check) => <div key={check.name}><strong>{check.passed ? '✓' : '×'} {check.name}</strong><span>{check.detail}</span></div>)}</details></TextFlowStep>
+          <TextFlowStep number="07" title="依据来源和风险提醒" last><SourceReferenceList sources={result.sourceReferences} warnings={result.warnings} /></TextFlowStep>
         </div>
         <FeedbackActions analysisId={analysisId} />
       </div>

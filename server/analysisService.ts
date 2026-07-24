@@ -298,11 +298,10 @@ export class AnalysisService {
         ? await generateSalesAdvice(this.config, baseline, job.transcript, knowledge, job.request)
         : baseline;
       await pause(120);
-      await this.save(job, 'validating', 92, '正在进行事实、隐私与合规校验'); await pause(120);
       job.result = result;
       job.error = undefined;
-      const finalStatus = result.handoffRequired ? 'handoff' : result.validationReport.passed ? 'completed' : 'blocked';
-      await this.save(job, finalStatus, 100, finalStatus === 'handoff' ? '建议升级人工处理' : finalStatus === 'blocked' ? '校验未通过，已阻止普通回复' : '分析完成');
+      const finalStatus = result.handoffRequired ? 'handoff' : 'completed';
+      await this.save(job, finalStatus, 100, finalStatus === 'handoff' ? '建议升级人工处理' : '分析完成');
       const running = [...(job.executionHistory ?? [])].reverse().find((record) => record.outcome === 'running');
       if (running) { running.outcome = 'completed'; running.finishedAt = new Date().toISOString(); await this.repository.updateJob(job); }
     } catch (error) { await this.fail(id, error); }

@@ -12,7 +12,7 @@ function toRoute(pathname: string): RoutePath {
   return ['/', '/materials', '/customers', '/reviews'].includes(pathname) ? pathname as RoutePath : '/';
 }
 
-const activeStatuses = new Set(['uploaded', 'parsing', 'classifying', 'retrieving', 'generating', 'validating']);
+const activeStatuses = new Set(['uploaded', 'parsing', 'classifying', 'retrieving', 'generating']);
 
 export function App() {
   const [path, setPath] = useState<RoutePath>(() => toRoute(window.location.pathname));

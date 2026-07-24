@@ -94,16 +94,6 @@ export interface SourceReference {
   verified: boolean;
 }
 
-export interface ValidationReport {
-  passed: boolean;
-  hookPresent: boolean;
-  lineCount: number;
-  unsupportedFacts: string[];
-  redlineHits: string[];
-  privacyMasked: boolean;
-  checks: Array<{ name: string; passed: boolean; detail: string }>;
-}
-
 export interface SalesAnalysisResult {
   generationMode?: 'ai' | 'rules';
   generationModel?: string;
@@ -121,7 +111,6 @@ export interface SalesAnalysisResult {
     techniques: string[];
   };
   followupAction: string;
-  validationReport: ValidationReport;
   riskLevel: RiskLevel;
   handoffRequired: boolean;
   styleFallbackUsed: boolean;

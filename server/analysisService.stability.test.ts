@@ -9,6 +9,29 @@ import { RuleBasedConversationParser } from './model/conversationParser.js';
 const config: AppConfig = { port: 8787, host: '127.0.0.1', corsOrigin: '*', retentionDays: 365, workerMode: 'external', repositoryDriver: 'memory', localDataDir: '.data-test', objectStorageDriver: 'memory', modelDriver: 'rule_based', embeddingModelName: 'text-embedding-3-large', knowledgeImportMaxTotalMb: 250, s3: { region: 'us-east-1', bucket: 'test', forcePathStyle: true } };
 const actor = { organizationId: 'default-org', userId: 'demo-user', role: 'admin' };
 
+class RecordingMemoryRepository extends MemoryRepository {
+  readonly updatedStatuses: string[] = [];
+
+  override async updateJob(job: Parameters<MemoryRepository['updateJob']>[0]) {
+    this.updatedStatuses.push(job.status);
+    await super.updateJob(job);
+  }
+}
+
+test('analysis completes without entering the removed validation stage', async () => {
+  const repository = new RecordingMemoryRepository();
+  const service = new AnalysisService(repository, new MemoryObjectStorage(), new RuleBasedConversationParser(), config);
+  const created = await service.create({
+    conversation: '客户：课程价格有点高\n销售：您更关心预算还是效果？\n客户：预算有限，但还想了解',
+    attachmentNames: [],
+  }, [], actor);
+
+  assert.equal(await service.processPending(), true);
+  assert.equal((await repository.getJob(created.id))?.status, 'completed');
+  assert.equal(repository.updatedStatuses.includes('validating'), false);
+  assert.equal(repository.updatedStatuses.includes('blocked'), false);
+});
+
 test('an analysis can be canceled and safely requeued', async () => {
   const repository = new MemoryRepository();
   const service = new AnalysisService(repository, new MemoryObjectStorage(), new RuleBasedConversationParser(), config);

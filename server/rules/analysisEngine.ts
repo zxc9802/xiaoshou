@@ -1,4 +1,4 @@
-import type { ClarificationQuestion, DeadlockType, DecisionStage, IntentTemperature, KnowledgeEntry, ParsedConversation, SalesAnalysisResult, SalesStyleProfile, SourceReference, ValidationReport } from '../../shared/contracts.js';
+import type { ClarificationQuestion, DeadlockType, DecisionStage, IntentTemperature, KnowledgeEntry, ParsedConversation, SalesAnalysisResult, SalesStyleProfile, SourceReference } from '../../shared/contracts.js';
 
 const disclaimer = '发送前请结合客户实际情况与贵司政策微调。';
 const stageLabels: Record<DecisionStage, string> = { aware: '初步了解', comparing: '有兴趣在比较', hesitating: '犹豫权衡', closing: '接近成交', lost_risk: '流失边缘' };
@@ -68,23 +68,6 @@ function applyStyle(reply: string, profile: SalesStyleProfile | undefined, highR
   return styled;
 }
 
-export function validateSalesReply(reply: string, transcript: ParsedConversation, hasPublishedFacts: boolean): ValidationReport {
-  const redlinePatterns = [/百分百|绝对回本|最后一个名额|今天不买以后别后悔|竞品.*垃圾|保证效果|保证落地|确保.{0,12}落地|一定.{0,12}落地/];
-  const redlineHits = redlinePatterns.filter((pattern) => pattern.test(reply)).map((pattern) => pattern.source);
-  const lineCount = reply.split(/\n/).filter(Boolean).length;
-  const hookPresent = /[？?]|您看|可以吗|方便吗|还是/.test(reply);
-  const unsupportedFactClaim = /价格|年费|折扣|优惠|客户案例|实施周期|席位|工作日|\d[\d,]*(?:\.\d+)?\s*(?:万元|元|%)|效果(?:明显|很好|提升|达到|保证)/.test(reply);
-  const unsupportedFacts = !hasPublishedFacts && !reply.includes('【待补充：') && unsupportedFactClaim ? ['回复包含企业资料库未提供依据的事实性内容'] : [];
-  const checks = [
-    { name: '安全红线', passed: redlineHits.length === 0, detail: redlineHits.length ? `命中：${redlineHits.join('、')}` : '未命中禁用话术' },
-    { name: '推进钩子', passed: hookPresent, detail: hookPresent ? '已包含提问、二选一或明确约定' : '缺少推进动作' },
-    { name: '长度', passed: lineCount <= 4, detail: `共${lineCount}行` },
-    { name: '事实依据', passed: unsupportedFacts.length === 0, detail: unsupportedFacts[0] ?? '事实性内容有已发布资料支持或未使用事实承诺' },
-    { name: '隐私', passed: true, detail: transcript.containsSensitiveData ? '已识别并遮盖敏感信息' : '未发现敏感信息' },
-  ];
-  return { passed: checks.every((check) => check.passed), hookPresent, lineCount, unsupportedFacts, redlineHits, privacyMasked: transcript.containsSensitiveData, checks };
-}
-
 export function analyzeWithRules(transcript: ParsedConversation, knowledge: KnowledgeEntry[], clarifications: ClarificationQuestion[] = [], userId?: string): SalesAnalysisResult {
   const classification = classifyConversation(transcript);
   const sourceReferences = references(knowledge, classification.deadlockType);
@@ -94,7 +77,6 @@ export function analyzeWithRules(transcript: ParsedConversation, knowledge: Know
   const generated = generateReply(classification);
   let recommendedReply = applyStyle(generated.reply, configuredStyle, classification.highRisk);
   if (!hasPublishedFacts && /价格|折扣|优惠|案例|效果|实施周期/.test(recommendedReply)) recommendedReply = '这个问题需要以已审核资料为准。我先为您核实【待补充：对应产品或价格依据】，确认后给您准确回复，可以吗？';
-  const validationReport = validateSalesReply(recommendedReply, transcript, hasPublishedFacts);
   const stage = stageLabels[classification.decisionStage];
   const styleFallbackUsed = !configuredStyle && salesMessages.length < 2;
   const warnings = [transcript.containsSensitiveData ? `检测到${transcript.sensitiveDataTypes.join('、')}，输出已脱敏。` : '', classification.highRisk ? '该场景需升级人工或上级处理，AI仅提供缓冲话术。' : '', !hasPublishedFacts ? '资料库中未找到已审核依据，请勿直接向客户承诺，建议咨询产品或售前人员。' : '', styleFallbackUsed ? '销售发言少于2条，已使用通用微信口吻。' : '', disclaimer].filter(Boolean);
@@ -113,7 +95,6 @@ export function analyzeWithRules(transcript: ParsedConversation, knowledge: Know
         ? { name: '尊重拒绝与长期培育', reason: '客户已经连续明确拒绝，继续追单会破坏信任。', conversionGoal: '得体结束并保留未来联系空间', techniques: ['尊重边界', '低压力收尾'] }
         : { name: classification.objectionType === '价格' ? '异议隔离与价值重构' : '风险承接与低门槛推进', reason: '客户仍在互动，核心不是缺少更多介绍，而是需要降低决策风险。', conversionGoal: '让客户说出最真实的一个顾虑并愿意继续沟通', techniques: ['承接顾虑', '直接回应', '价值重构', '微承诺推进'] },
     followupAction: generated.action,
-    validationReport,
     riskLevel: classification.highRisk ? 'high' : transcript.containsSensitiveData || classification.refusalCount >= 2 ? 'medium' : 'low',
     handoffRequired: classification.highRisk,
     styleFallbackUsed,

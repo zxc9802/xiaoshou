@@ -2,16 +2,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { DEFAULT_KNOWLEDGE } from '../knowledge/defaults.js';
 import { parseConversationText } from '../model/conversationParser.js';
-import { analyzeWithRules, buildClarifications, classifyConversation, validateSalesReply } from './analysisEngine.js';
+import { analyzeWithRules, buildClarifications, classifyConversation } from './analysisEngine.js';
 
-test('price objection is classified and reply contains a hook', () => {
+test('price objection is classified and reply contains a next-step question', () => {
   const transcript = parseConversationText('客户：你们价格太高了\n销售：我们的功能很全面\n客户：实施需要多久？预算也有限');
   const result = analyzeWithRules(transcript, DEFAULT_KNOWLEDGE);
   assert.equal(result.deadlockType, 'objection');
   assert.equal(result.objectionType, '价格');
   assert.equal(result.intentTemperature, 'high');
-  assert.equal(result.validationReport.hookPresent, true);
-  assert.equal(result.validationReport.redlineHits.length, 0);
+  assert.match(result.recommendedReply, /[？?]/);
 });
 
 test('silent, vague and stuck branches use distinct strategies', () => {
@@ -51,7 +50,6 @@ test('missing published L3 facts prevents unsupported factual reply', () => {
   assert.equal(result.sourceReferences.some((source) => source.category === '产品资料'), false);
   assert.equal(result.warnings.some((warning) => warning.includes('未找到已审核依据')), true);
   assert.match(result.recommendedReply, /【待补充：/);
-  assert.equal(result.validationReport.unsupportedFacts.length, 0);
 });
 
 test('published L4 profile changes expression but keeps strategy hook', () => {
@@ -61,19 +59,4 @@ test('published L4 profile changes expression but keeps strategy hook', () => {
   assert.match(result.recommendedReply, /^王总，/);
   assert.match(result.recommendedReply, /😊$/);
   assert.equal(result.styleFallbackUsed, false);
-  assert.equal(result.validationReport.hookPresent, true);
-});
-
-test('discussing a customer concern about results is not treated as an unsupported fact claim', () => {
-  const transcript = parseConversationText('客户：我担心没有效果\n销售：理解您的顾虑');
-  const report = validateSalesReply('理解您的顾虑，我们与其纠结效果，不如先确认您最希望改善的饮用习惯，您看可以吗？', transcript, false);
-  assert.equal(report.unsupportedFacts.length, 0);
-  assert.equal(report.checks.find((check) => check.name === '事实依据')?.passed, true);
-});
-
-test('numeric commercial claims require published factual evidence', () => {
-  const transcript = parseConversationText('客户：请介绍企业版\n销售：我核实一下');
-  const report = validateSalesReply('企业版年费39,800元，最多80席位，10个工作日交付，您看可以吗？', transcript, false);
-  assert.equal(report.passed, false);
-  assert.ok(report.unsupportedFacts.length > 0);
 });

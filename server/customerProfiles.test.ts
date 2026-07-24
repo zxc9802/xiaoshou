@@ -21,7 +21,7 @@ function job(overrides: Partial<StoredAnalysisJob>): StoredAnalysisJob {
     result: {
       parsedConversation: { messages: [], lastSpeaker: 'customer', lastMessage: '我们先看看', containsSensitiveData: false, sensitiveDataTypes: [], requiresConfirmation: false },
       deadlockType: 'objection', intentTemperature: 'mid', decisionStage: 'comparing', objectionType: '价值确认', clarificationQuestions: [],
-      situationAnalysis: '客户正在确认培训能否真正落地。', followupAction: '明确交付物。', validationReport: { passed: true, hookPresent: true, lineCount: 2, unsupportedFacts: [], redlineHits: [], privacyMasked: true, checks: [] }, riskLevel: 'low', handoffRequired: false, styleFallbackUsed: false, fixedDisclaimer: '发送前请微调。',
+      situationAnalysis: '客户正在确认培训能否真正落地。', followupAction: '明确交付物。', riskLevel: 'low', handoffRequired: false, styleFallbackUsed: false, fixedDisclaimer: '发送前请微调。',
       stage: '有兴趣在比较', stageEvidence: '客户继续询问。', stageConfidence: 85, explicitNeeds: ['确认培训交付物'], implicitNeedHypotheses: [], salesLoopIssue: { type: '回答不当', problem: '回答空泛', reason: '没有回答交付物' }, replyGoal: '确认核心顾虑', recommendedReply: '建议回复', alternativeReplies: [], nextBranches: [], sourceReferences: [], warnings: [],
     },
     ...overrides,

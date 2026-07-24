@@ -120,9 +120,9 @@ export const profileApi = {
   saveStyle: (profile: SalesStyleProfile) => fetch('/api/v1/profile/style', { method: 'PUT', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify(profile) }).then(parseResponse<SalesStyleProfile>),
 };
 
-export const ANALYSIS_STEPS = ['正在识别对话', '正在判断销售情境', '正在检索规则与资料', '正在生成销管建议', '正在进行事实和合规校验'] as const;
+export const ANALYSIS_STEPS = ['正在识别对话', '正在判断销售情境', '正在检索规则与资料', '正在生成销管建议'] as const;
 
 export function progressIndex(job?: AnalysisJob | null) {
   if (!job) return 0;
-  return ({ uploaded: 0, parsing: 0, needs_confirmation: 1, classifying: 1, retrieving: 2, generating: 3, validating: 4, completed: 4, blocked: 4, handoff: 4, canceled: 0, failed: 0 } as const)[job.status];
+  return ({ uploaded: 0, parsing: 0, needs_confirmation: 1, classifying: 1, retrieving: 2, generating: 3, validating: 3, completed: 3, blocked: 3, handoff: 3, canceled: 0, failed: 0 } as const)[job.status];
 }

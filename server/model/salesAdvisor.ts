@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import type { AnalysisRequestInput, KnowledgeEntry, ParsedConversation, SalesAnalysisResult, SourceReference } from '../../shared/contracts.js';
 import type { AppConfig } from '../config.js';
-import { validateSalesReply } from '../rules/analysisEngine.js';
 import { generateJsonText } from './generativeClient.js';
 
 const percentageSchema = z.preprocess((value) => typeof value === 'number' && value >= 0 && value <= 1 ? value * 100 : value, z.number().min(0).max(100));
@@ -191,17 +190,6 @@ export function applyModelAdvice(baseline: SalesAnalysisResult, advice: ModelSal
   }));
   const hasPublishedFacts = evidence.factsGrounded
     && evidence.entries.some((entry) => isFactualSource(entry));
-  const validationReport = validateSalesReply(recommendedReply, transcript, hasPublishedFacts);
-  const checks = [...validationReport.checks];
-  const needsConversionTechnique = !baseline.handoffRequired && baseline.decisionStage !== 'lost_risk';
-  const concernAcknowledged = /理解|确实|您担心|您顾虑|怕|先不急|您说得对|这个问题很关键/.test(recommendedReply);
-  if (needsConversionTechnique) checks.push({ name: '销售承接', passed: concernAcknowledged, detail: concernAcknowledged ? '先承接客户真实顾虑，再推进下一步' : '回复没有先承接客户的决策顾虑' });
-  if (needsConversionTechnique) checks.push({ name: '策略运用', passed: advice.salesStrategy.techniques.length > 0, detail: `本轮采用：${advice.salesStrategy.techniques.join('、')}` });
-  if (baseline.handoffRequired) checks.push({ name: '人工升级', passed: /人工|负责人|升级|记录|核实/.test(recommendedReply), detail: '高风险场景必须明确升级人工或负责人' });
-  if (baseline.decisionStage === 'lost_risk') checks.push({ name: '拒绝收尾', passed: !/购买|付款|优惠|名额|报名/.test(recommendedReply), detail: '客户连续拒绝后不得继续推进成交' });
-  const competitorClaim = /(?:网上|免费|其他机构|竞品|同行).{0,24}(?:通常|多为|都是|只能|不能|没有|缺乏|更差)/.test(recommendedReply);
-  checks.push({ name: '竞品事实', passed: !competitorClaim || selectedSources.some((source) => source.category === '竞品口径'), detail: competitorClaim ? '竞品比较必须引用已审核竞品口径' : '未使用无依据的竞品断言' });
-  const finalValidation = { ...validationReport, passed: checks.every((check) => check.passed), checks };
   const noReliableFactsWarning = hasPublishedFacts ? [] : ['本次AI回复未引用已审核的产品、价格或案例事实，请勿对客户作确定承诺。'];
   return {
     ...baseline,
@@ -212,7 +200,6 @@ export function applyModelAdvice(baseline: SalesAnalysisResult, advice: ModelSal
     salesLoopIssue: advice.salesLoopIssue.type.toLowerCase() === 'none' ? { ...advice.salesLoopIssue, type: '暂无明显死循环' } : advice.salesLoopIssue,
     alternativeReplies: advice.alternativeReplies.map((reply) => ({ ...reply, content: lineLimit(reply.content) })),
     sourceReferences: selectedSources,
-    validationReport: finalValidation,
     warnings: [...new Set([...baseline.warnings, ...noReliableFactsWarning])],
   };
 }
