@@ -20,6 +20,23 @@ import { KnowledgeService } from './knowledgeService.js';
 import { ProductService } from './productService.js';
 import { ReviewService } from './reviewService.js';
 import { createConversationParser } from './model/conversationParser.js';
+import {
+  clearSsoSessionCookie,
+  createSsoSessionCookie,
+  exchangeMainAppSsoTicket,
+  getPublicAppUrl,
+  getSsoSessionCookieMaxAge,
+  readSsoSessionFromRequest,
+  requestActor,
+  serializeSsoSessionCookie,
+  validateMainAppSession,
+} from './sso.js';
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    ssoActor?: RequestActor;
+  }
+}
 
 const config = loadConfig();
 const repository: Repository = config.repositoryDriver === 'postgres'
@@ -63,11 +80,8 @@ await registerCors(app, config.corsOrigin);
 await app.register(multipart, { limits: { files: 50, fileSize: 25 * 1024 * 1024, parts: 80 } });
 
 function actor(request: FastifyRequest) {
-  return {
-    organizationId: String(request.headers['x-organization-id'] ?? 'default-org'),
-    userId: String(request.headers['x-user-id'] ?? 'demo-user'),
-    role: String(request.headers['x-user-role'] ?? 'admin'),
-  };
+  if (!request.ssoActor) throw new Error('请先登录主站后再访问销转智能体');
+  return request.ssoActor;
 }
 function requireAdmin(request: FastifyRequest) { const current = actor(request); if (current.role !== 'admin') throw new Error('该操作需要企业管理员权限'); return current; }
 function publicJob(job: StoredAnalysisJob) { const { organizationId: _organizationId, createdBy: _createdBy, attachments: _attachments, customerAvatarKey: _customerAvatarKey, ...safe } = job; return safe; }
@@ -183,6 +197,35 @@ app.get('/api/health', async () => {
     workerMode: config.workerMode,
     retentionDays: config.retentionDays,
   };
+});
+
+app.get('/api/sso/callback', async (request, reply) => {
+  const ticket = String((request.query as { ticket?: string }).ticket ?? '').trim();
+  if (!ticket) return reply.code(400).send({ message: 'SSO ticket is required.' });
+  try {
+    const { redirectPath, session } = await exchangeMainAppSsoTicket(ticket);
+    const cookie = createSsoSessionCookie(session);
+    return reply
+      .header('Set-Cookie', serializeSsoSessionCookie(cookie.value, getSsoSessionCookieMaxAge(session.expiresAt)))
+      .redirect(new URL(redirectPath, getPublicAppUrl()).toString());
+  } catch {
+    return reply.code(401).send({ message: '主站 SSO 换票失败' });
+  }
+});
+
+app.get('/api/sso/session', async (request, reply) => {
+  const session = readSsoSessionFromRequest(request);
+  if (session && await validateMainAppSession(session)) return { success: true, data: { user: session.user } };
+  return reply.header('Set-Cookie', clearSsoSessionCookie()).code(401).send({ message: '主站登录状态已失效' });
+});
+
+app.addHook('preHandler', async (request, reply) => {
+  if (!request.url.startsWith('/api/v1/')) return;
+  const session = readSsoSessionFromRequest(request);
+  if (!session || !await validateMainAppSession(session)) {
+    return reply.header('Set-Cookie', clearSsoSessionCookie()).code(401).send({ message: '请先登录主站后再访问销转智能体' });
+  }
+  request.ssoActor = requestActor(session);
 });
 
 const productPackageSchema = z.object({ id: z.string().optional(), name: z.string().min(1).max(100), priceDescription: z.string().max(500).optional(), applicableConditions: z.string().max(1000).optional(), effectiveFrom: z.string().optional(), effectiveTo: z.string().optional() }).transform((item) => ({ ...item, id: item.id ?? randomUUID() }));
