@@ -46,3 +46,15 @@ test('real compliance, tactics, and product facts remain eligible', () => {
 
   assert.deepEqual(eligible.map(isKnowledgeRetrievalEligible), [true, true, true]);
 });
+
+test('document-level AI testing metadata does not exclude a factual entry', () => {
+  assert.equal(isKnowledgeRetrievalEligible(entry({
+    title: '一、模拟产品总设定',
+    content: '建议零售价169元，产品属于普通食品类袋泡茶。',
+    structuredData: {
+      businessCategory: '产品资料',
+      analysisSummary: '本资料包用于测试AI分析和回答是否准确。',
+      purpose: 'AI销转智能体演练',
+    },
+  })), true);
+});

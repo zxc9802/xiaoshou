@@ -1,13 +1,5 @@
 import type { KnowledgeEntry } from '../../shared/contracts.js';
 
-const STRUCTURED_TEXT_KEYS = [
-  'businessCategory',
-  'analysisSummary',
-  'sourceFileName',
-  'purpose',
-  'description',
-] as const;
-
 const META_KNOWLEDGE_PATTERNS = [
   /(?:客户)?隐藏(?:信息|资料)/i,
   /(?:不要|不得|禁止).{0,16}(?:输入|提供|展示|返回|写入|泄露).{0,16}(?:AI|人工智能|销转智能体|智能体|模型)/i,
@@ -20,11 +12,7 @@ const META_KNOWLEDGE_PATTERNS = [
 ] as const;
 
 function retrievalText(entry: KnowledgeEntry) {
-  const structuredText = STRUCTURED_TEXT_KEYS
-    .map((key) => entry.structuredData?.[key])
-    .filter((value): value is string => typeof value === 'string')
-    .join('\n');
-  return `${entry.title}\n${entry.content}\n${structuredText}`.replace(/\s+/g, ' ').trim();
+  return `${entry.title}\n${entry.content}`.replace(/\s+/g, ' ').trim();
 }
 
 export function isKnowledgeRetrievalEligible(entry: KnowledgeEntry) {
