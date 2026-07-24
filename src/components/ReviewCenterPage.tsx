@@ -11,7 +11,7 @@ const adoptionLabels: Record<ConversationReview['adoption'], string> = {
 };
 const diagnosisOptions = ['客户判断错误', '销售策略不合适', '回复表达不合适', '产品或价格资料不足', '缺少案例或证据', '客户没有真实需求', '跟进时机不合适'];
 
-export function ReviewCenterPage({ onBack }: { onBack: () => void }) {
+export function ReviewCenterPage({ onBack, analysisKnowledgeEnabled = false }: { onBack: () => void; analysisKnowledgeEnabled?: boolean }) {
   const [reviews, setReviews] = useState<ConversationReview[]>([]);
   const [metrics, setMetrics] = useState<ReviewMetrics | null>(null);
   const [selectedId, setSelectedId] = useState('');
@@ -66,7 +66,7 @@ export function ReviewCenterPage({ onBack }: { onBack: () => void }) {
       <Metric label="有效推进率" value={metrics ? `${displayMetrics.effectiveProgressRate}%` : undefined} note="阶段前进或确认成交" />
       <Metric label="挽回客户" value={metrics ? displayMetrics.rescuedCustomers : undefined} note="从犹豫或流失边缘重新推进" />
       <Metric label="建议采用率" value={metrics ? `${displayMetrics.adoptionRate}%` : undefined} note="直接采用与修改后采用" />
-      <Metric label="知识缺口" value={metrics ? displayMetrics.knowledgeGapCount : undefined} note="缺少已审核依据的复盘" warning />
+      {analysisKnowledgeEnabled && <Metric label="知识缺口" value={metrics ? displayMetrics.knowledgeGapCount : undefined} note="缺少已审核依据的复盘" warning />}
     </section>
 
     <section className="review-toolbar">
@@ -85,7 +85,7 @@ export function ReviewCenterPage({ onBack }: { onBack: () => void }) {
         {visible.length ? visible.map((review) => <ReviewQueueItem key={review.id} review={review} active={review.id === selected?.id} onClick={() => setSelectedId(review.id)} />) : <div className="review-queue-empty"><SparkIcon /><strong>当前没有记录</strong><span>后续客户回复或反馈出现后会自动进入这里。</span></div>}
       </aside>
       <div className="review-detail">
-        {selected ? <ReviewDetail review={selected} busy={busy} onConfirm={confirm} onSaveDiagnosis={async (diagnosis, note) => { setBusy(true); try { replaceReview(await reviewApi.saveDiagnosis(selected.id, diagnosis, note)); } catch (caught) { setError(caught instanceof Error ? caught.message : '保存失败'); } finally { setBusy(false); } }} onPromote={async () => { setBusy(true); try { replaceReview(await reviewApi.promote(selected.id)); } catch (caught) { setError(caught instanceof Error ? caught.message : '生成技巧候选失败'); } finally { setBusy(false); } }} /> : <div className="review-detail-empty"><SparkIcon /><h2>选择一条对话开始复盘</h2><p>系统会把前后两次沟通关联起来，帮助判断策略是否真正推动客户。</p></div>}
+        {selected ? <ReviewDetail review={selected} busy={busy} analysisKnowledgeEnabled={analysisKnowledgeEnabled} onConfirm={confirm} onSaveDiagnosis={async (diagnosis, note) => { setBusy(true); try { replaceReview(await reviewApi.saveDiagnosis(selected.id, diagnosis, note)); } catch (caught) { setError(caught instanceof Error ? caught.message : '保存失败'); } finally { setBusy(false); } }} onPromote={async () => { setBusy(true); try { replaceReview(await reviewApi.promote(selected.id)); } catch (caught) { setError(caught instanceof Error ? caught.message : '生成技巧候选失败'); } finally { setBusy(false); } }} /> : <div className="review-detail-empty"><SparkIcon /><h2>选择一条对话开始复盘</h2><p>系统会把前后两次沟通关联起来，帮助判断策略是否真正推动客户。</p></div>}
       </div>
     </section>
   </main>;
@@ -104,7 +104,7 @@ function ReviewQueueItem({ review, active, onClick }: { review: ConversationRevi
   </button>;
 }
 
-function ReviewDetail({ review, busy, onConfirm, onSaveDiagnosis, onPromote }: { review: ConversationReview; busy: boolean; onConfirm: (outcome: ReviewOutcome, actualReply?: string) => Promise<void>; onSaveDiagnosis: (diagnosis: string[], note?: string) => Promise<void>; onPromote: () => Promise<void> }) {
+function ReviewDetail({ review, busy, analysisKnowledgeEnabled, onConfirm, onSaveDiagnosis, onPromote }: { review: ConversationReview; busy: boolean; analysisKnowledgeEnabled: boolean; onConfirm: (outcome: ReviewOutcome, actualReply?: string) => Promise<void>; onSaveDiagnosis: (diagnosis: string[], note?: string) => Promise<void>; onPromote: () => Promise<void> }) {
   const [actualReply, setActualReply] = useState(review.actualReply ?? '');
   const [diagnosis, setDiagnosis] = useState(review.diagnosis);
   const [note, setNote] = useState(review.note ?? '');
@@ -130,7 +130,7 @@ function ReviewDetail({ review, busy, onConfirm, onSaveDiagnosis, onPromote }: {
         <div className="review-diagnosis">{diagnosisOptions.map((item) => <button key={item} className={diagnosis.includes(item) ? 'active' : ''} onClick={() => setDiagnosis((items) => items.includes(item) ? items.filter((value) => value !== item) : [...items, item])}>{diagnosis.includes(item) && <CheckIcon />}{item}</button>)}</div>
         <label className="review-field"><span>复盘备注</span><textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="记录本次沟通中做对了什么、下一次要调整什么。" /></label>
         <div className="review-save-row"><button className="secondary-button" disabled={busy} onClick={() => void onSaveDiagnosis(diagnosis, note)}>保存复盘</button><button className="primary-button" disabled={busy || !['progressed','won'].includes(effective) || Boolean(review.knowledgeCandidateId)} onClick={() => void onPromote()}>{review.knowledgeCandidateId ? '已生成技巧候选' : '沉淀为销售技巧'}</button></div>
-        {review.knowledgeGap && <p className="review-gap">本次回复缺少可靠的已审核资料，可在资料库补充产品、价格、案例或销售依据。</p>}
+        {analysisKnowledgeEnabled && review.knowledgeGap && <p className="review-gap">本次回复缺少可靠的已审核资料，可在资料库补充产品、价格、案例或销售依据。</p>}
       </ReviewBlock>
     </div>
   </>;

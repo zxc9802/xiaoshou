@@ -15,7 +15,7 @@ function parseConversation(conversation: string) {
   });
 }
 
-export function AnalysisWorkspace({ request, result, job, history, busy, progress, progressSteps, error, onAnalyze, onReset, onSelectHistory, onDeleteHistory, onConfirmTranscript, onClarify, onCancel, onRetry }: {
+export function AnalysisWorkspace({ request, result, job, history, busy, progress, progressSteps, analysisKnowledgeEnabled, error, onAnalyze, onReset, onSelectHistory, onDeleteHistory, onConfirmTranscript, onClarify, onCancel, onRetry }: {
   request: AnalysisRequest | null;
   result: SalesAnalysisResult | null;
   job: AnalysisJob | null;
@@ -23,6 +23,7 @@ export function AnalysisWorkspace({ request, result, job, history, busy, progres
   busy: boolean;
   progress: number;
   progressSteps: readonly string[];
+  analysisKnowledgeEnabled: boolean;
   error: string;
   onAnalyze: (request: AnalysisRequest) => void;
   onReset: () => void;
@@ -115,7 +116,7 @@ export function AnalysisWorkspace({ request, result, job, history, busy, progres
         </aside>
         <section className="coach-column">
           {error && <div className="workspace-error" role="alert">{error}</div>}
-          {job?.status === 'needs_confirmation' && job.transcript?.requiresConfirmation ? <TranscriptReview key={job.id} transcript={job.transcript} onConfirm={onConfirmTranscript} /> : job?.status === 'needs_confirmation' ? <ClarificationPanel key={job.id} questions={job.clarificationQuestions} onSubmit={onClarify} /> : job?.status === 'failed' || job?.status === 'canceled' ? <><AnalysisError message={job.status === 'canceled' ? '本次分析已取消，可随时重新开始。' : job.error?.message ?? '分析服务暂时不可用'} /><div className="analysis-task-actions"><button className="secondary-button" onClick={onRetry}>重新分析</button></div></> : busy && !result ? <><AnalysisProgress steps={progressSteps} activeIndex={progress} /><div className="analysis-task-actions"><button className="secondary-button" onClick={onCancel}>取消分析</button></div></> : result ? <SalesCoachResult key={job?.id ?? 'result'} result={result} embedded jobStatus={job?.status} analysisId={job?.id} /> : <EmptyAdvice />}
+          {job?.status === 'needs_confirmation' && job.transcript?.requiresConfirmation ? <TranscriptReview key={job.id} transcript={job.transcript} onConfirm={onConfirmTranscript} /> : job?.status === 'needs_confirmation' ? <ClarificationPanel key={job.id} questions={job.clarificationQuestions} onSubmit={onClarify} /> : job?.status === 'failed' || job?.status === 'canceled' ? <><AnalysisError message={job.status === 'canceled' ? '本次分析已取消，可随时重新开始。' : job.error?.message ?? '分析服务暂时不可用'} /><div className="analysis-task-actions"><button className="secondary-button" onClick={onRetry}>重新分析</button></div></> : busy && !result ? <><AnalysisProgress steps={progressSteps} activeIndex={progress} /><div className="analysis-task-actions"><button className="secondary-button" onClick={onCancel}>取消分析</button></div></> : result ? <SalesCoachResult key={job?.id ?? 'result'} result={result} embedded jobStatus={job?.status} analysisId={job?.id} analysisKnowledgeEnabled={analysisKnowledgeEnabled} /> : <EmptyAdvice />}
           <div className={`followup-composer main-composer${dragging ? ' is-dragging' : ''}`} onDragEnter={handleDragOver} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop} aria-label="图片上传区域">
             {dragging && <div className="drop-overlay" role="status"><UploadIcon /><strong>松开即可上传聊天截图</strong><span>支持 png、jpg、jpeg、webp，最多10张</span></div>}
             <div className="composer-title"><div><strong>{result ? '补充最新对话' : '添加客户对话'}</strong><span>{result ? '客户有新回复？粘贴后继续分析' : '粘贴完整对话，或上传聊天截图'}</span></div>{busy && result && <em>正在重新分析…</em>}</div>

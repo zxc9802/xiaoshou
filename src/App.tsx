@@ -4,7 +4,7 @@ import { CustomerProfilesPage } from './components/CustomerProfilesPage';
 import { KnowledgeBasePage } from './components/KnowledgeBasePage';
 import { ReviewCenterPage } from './components/ReviewCenterPage';
 import { TopNavigation, type RoutePath } from './components/TopNavigation';
-import { ANALYSIS_STEPS, analysisApi, customerApi, progressIndex } from './services/analysisApi';
+import { analysisApi, analysisSteps, customerApi, progressIndex, runtimeConfigApi } from './services/analysisApi';
 import type { AnalysisHistoryItem, AnalysisJob, AnalysisRequest, ParsedConversation } from './types/analysis';
 
 function toRoute(pathname: string): RoutePath {
@@ -19,6 +19,7 @@ export function App() {
   const [job, setJob] = useState<AnalysisJob | null>(null);
   const [history, setHistory] = useState<AnalysisHistoryItem[]>([]);
   const [followUpDueCount, setFollowUpDueCount] = useState(0);
+  const [analysisKnowledgeEnabled, setAnalysisKnowledgeEnabled] = useState(false);
   const [error, setError] = useState('');
 
   const loadHistory = useCallback(async () => { try { setHistory(await analysisApi.list()); } catch { /* API may still be starting. */ } }, []);
@@ -32,6 +33,11 @@ export function App() {
     const timer = window.setInterval(() => void loadReminderSummary(), 60_000);
     return () => window.clearInterval(timer);
   }, [loadReminderSummary]);
+  useEffect(() => {
+    void runtimeConfigApi.get()
+      .then((runtime) => setAnalysisKnowledgeEnabled(runtime.analysisKnowledgeEnabled))
+      .catch(() => setAnalysisKnowledgeEnabled(false));
+  }, []);
   useEffect(() => {
     if (!job || !activeStatuses.has(job.status)) return;
     const timer = window.setInterval(async () => {
@@ -93,12 +99,13 @@ export function App() {
   const busy = Boolean(job && activeStatuses.has(job.status));
   const request = job?.request ? { ...job.request } : null;
   const result = job?.result ?? null;
-  const currentProgress = useMemo(() => progressIndex(job), [job]);
+  const currentProgress = useMemo(() => progressIndex(job, analysisKnowledgeEnabled), [job, analysisKnowledgeEnabled]);
+  const currentAnalysisSteps = useMemo(() => analysisSteps(analysisKnowledgeEnabled), [analysisKnowledgeEnabled]);
 
   let page;
-  if (path === '/') page = <AnalysisWorkspace request={request} result={result} job={job} history={history} busy={busy} progress={currentProgress} progressSteps={ANALYSIS_STEPS} error={error} onAnalyze={analyze} onReset={reset} onSelectHistory={selectHistory} onDeleteHistory={deleteHistory} onConfirmTranscript={confirmTranscript} onClarify={clarify} onCancel={cancel} onRetry={retry} />;
+  if (path === '/') page = <AnalysisWorkspace request={request} result={result} job={job} history={history} busy={busy} progress={currentProgress} progressSteps={currentAnalysisSteps} analysisKnowledgeEnabled={analysisKnowledgeEnabled} error={error} onAnalyze={analyze} onReset={reset} onSelectHistory={selectHistory} onDeleteHistory={deleteHistory} onConfirmTranscript={confirmTranscript} onClarify={clarify} onCancel={cancel} onRetry={retry} />;
   else if (path === '/materials') page = <KnowledgeBasePage onBack={() => navigate('/')} />;
   else if (path === '/customers') page = <CustomerProfilesPage onBack={() => navigate('/')} onOpenAnalysis={(id) => void openCustomerAnalysis(id)} onReminderChange={loadReminderSummary} />;
-  else page = <ReviewCenterPage onBack={() => navigate('/')} />;
+  else page = <ReviewCenterPage onBack={() => navigate('/')} analysisKnowledgeEnabled={analysisKnowledgeEnabled} />;
   return <><TopNavigation currentPath={path} onNavigate={navigate} followUpDueCount={followUpDueCount} />{page}</>;
 }

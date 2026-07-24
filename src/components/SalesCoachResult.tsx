@@ -8,7 +8,7 @@ import { SourceReferenceList } from './SourceReferenceList';
 import { TextFlowStep } from './TextFlowStep';
 import { ChevronIcon, SparkIcon } from './Icons';
 
-export function SalesCoachResult({ result, embedded = false, jobStatus, analysisId }: { result: SalesAnalysisResult | null; embedded?: boolean; jobStatus?: AnalysisJobStatus; analysisId?: string }) {
+export function SalesCoachResult({ result, embedded = false, jobStatus, analysisId, analysisKnowledgeEnabled = false }: { result: SalesAnalysisResult | null; embedded?: boolean; jobStatus?: AnalysisJobStatus; analysisId?: string; analysisKnowledgeEnabled?: boolean }) {
   const [detailsCollapsed, setDetailsCollapsed] = useState(false);
   if (!result) return <section className="result-card empty-result"><div className="empty-visual"><span><SparkIcon /></span><i /><i /></div><h2>分析结果将在这里显示</h2><p>AI会按照销售判断流程，逐步给出建议。</p></section>;
   const detailsId = `analysis-details-${analysisId ?? 'current'}`;
@@ -24,7 +24,7 @@ export function SalesCoachResult({ result, embedded = false, jobStatus, analysis
         <AlternativeReplies replies={result.alternativeReplies} />
         <p className="fixed-disclaimer">⚠ {result.fixedDisclaimer}</p>
       </div>
-      <div className="analysis-section-title"><div><strong>销管判断与下一步</strong><div className="analysis-section-actions"><span>依据企业规则及已审核资料生成</span><button type="button" className="analysis-collapse-button" onClick={() => setDetailsCollapsed((collapsed) => !collapsed)} aria-expanded={!detailsCollapsed} aria-controls={detailsId}>{detailsCollapsed ? '展开详情' : '收起详情'}<ChevronIcon /></button></div></div></div>
+      <div className="analysis-section-title"><div><strong>销管判断与下一步</strong><div className="analysis-section-actions"><span>{analysisKnowledgeEnabled ? '依据企业规则及已审核资料生成' : '依据客户对话与销售判断生成'}</span><button type="button" className="analysis-collapse-button" onClick={() => setDetailsCollapsed((collapsed) => !collapsed)} aria-expanded={!detailsCollapsed} aria-controls={detailsId}>{detailsCollapsed ? '展开详情' : '收起详情'}<ChevronIcon /></button></div></div></div>
       <div id={detailsId} className="analysis-details" hidden={detailsCollapsed}>
         <div className="flow-list">
           <TextFlowStep number="01" title="客户当前所处阶段"><div className="stage-row"><strong>{result.stage}</strong><span className="confidence">置信度 {result.stageConfidence}%</span></div><div className="evidence"><span>判断依据</span><p>{result.stageEvidence}</p></div></TextFlowStep>
@@ -32,8 +32,8 @@ export function SalesCoachResult({ result, embedded = false, jobStatus, analysis
           <TextFlowStep number="03" title="客户深层需求假设">{result.implicitNeedHypotheses.map((hypothesis) => <div className="hypothesis" key={hypothesis.statement}><div className="hypothesis-title"><span>假设</span><strong>{hypothesis.statement}</strong><em>置信度 {hypothesis.confidence}%</em></div><dl><div><dt>判断依据</dt><dd>{hypothesis.evidence}</dd></div><div><dt>建议验证问题</dt><dd>“{hypothesis.validationQuestion}”</dd></div></dl></div>)}</TextFlowStep>
           <TextFlowStep number="04" title="销售陷入死循环的原因"><div className="loop-type">{result.salesLoopIssue.type}</div><p className="body-copy">{result.salesLoopIssue.problem}</p><div className="why-box"><span>为什么无法继续推进</span><p>{result.salesLoopIssue.reason}</p></div></TextFlowStep>
           <TextFlowStep number="05" title="本轮沟通目标"><div className="goal-box"><span>唯一目标</span><strong>{result.replyGoal}</strong></div></TextFlowStep>
-          <TextFlowStep number="06" title="客户可能回应及下一步"><NextActionList branches={result.nextBranches} /></TextFlowStep>
-          <TextFlowStep number="07" title="依据来源和风险提醒" last><SourceReferenceList sources={result.sourceReferences} warnings={result.warnings} /></TextFlowStep>
+          <TextFlowStep number="06" title="客户可能回应及下一步" last={!analysisKnowledgeEnabled}><NextActionList branches={result.nextBranches} /></TextFlowStep>
+          {analysisKnowledgeEnabled && <TextFlowStep number="07" title="依据来源和风险提醒" last><SourceReferenceList sources={result.sourceReferences} warnings={result.warnings} /></TextFlowStep>}
         </div>
         <FeedbackActions analysisId={analysisId} />
       </div>
