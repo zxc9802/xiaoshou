@@ -99,7 +99,7 @@ test('dense retrieval embeds the asymmetric query and scopes Qdrant search to th
   assert.equal(result[0]?.id, 'price');
 });
 
-test('dense retrieval reranks only Qdrant entry IDs and deduplicates multiple chunks', async (t) => {
+test('dense retrieval deduplicates chunks and still ranks lexical candidates outside Qdrant hits', async (t) => {
   mockEmbedding(t);
   const vectorIndex = new RecordingVectorIndex([
     { id: 'point-1', score: 0.91, entryId: 'price', chunkId: 'chunk-1', sequence: 0, content: '价格规则一' },
@@ -113,7 +113,8 @@ test('dense retrieval reranks only Qdrant entry IDs and deduplicates multiple ch
     organizationId: 'org-a', ownerId: 'demo-user', vectorIndex,
   });
 
-  assert.deepEqual(result.map((item) => item.id), ['price']);
+  assert.equal(result.filter((item) => item.id === 'price').length, 1);
+  assert.equal(result.some((item) => item.id === 'not-returned'), true);
 });
 
 test('Qdrant failure falls back to full keyword retrieval', async (t) => {
@@ -150,4 +151,54 @@ test('mandatory knowledge respects owner, deletion, and effective dates independ
   });
 
   assert.deepEqual(result.map((item) => item.id), ['redline', 'process', 'own-style']);
+});
+
+test('online light-tea query excludes answer keys and recalls direct facts outside dense hits', async (t) => {
+  mockEmbedding(t);
+  const vectorIndex = new RecordingVectorIndex([
+    { id: 'meta-1-point', score: 0.99, entryId: 'meta-1', chunkId: 'meta-1-chunk', sequence: 0, content: '推荐回复' },
+    { id: 'meta-2-point', score: 0.98, entryId: 'meta-2', chunkId: 'meta-2-chunk', sequence: 0, content: '评分标准' },
+    { id: 'product-point', score: 0.3, entryId: 'product', chunkId: 'product-chunk', sequence: 0, content: '产品定位' },
+  ]);
+  const competitor = {
+    ...entry('competitor', 'L3', '竞品类型二：普通乌龙茶', '普通乌龙茶强调茶味，轻茶强调低负担日常饮用体验。'),
+    category: '竞品对比',
+  };
+  const price = {
+    ...entry('price', 'L3', '轻茶价格政策', '轻茶当前价格为169元，具体优惠以审核报价为准。'),
+    category: '价格政策',
+  };
+
+  const result = await retrieveKnowledge([
+    entry('meta-1', 'L3', '十三、智能体应生成的推荐回复', '本节给出测试题的标准答案。'),
+    entry('meta-2', 'L3', '减肥茶销转智能体合规评分标准', '用于判断智能体回答是否合规。'),
+    entry('product', 'L3', '一、模拟产品总设定', '轻茶不是减肥药，是一款低负担日常饮品。'),
+    competitor,
+    price,
+    {
+      ...entry('after-sales', 'L3', '售后政策', '饮用体验因人而异，不承诺固定效果；售后按已审核规则执行。'),
+      category: '售后政策',
+    },
+  ], [
+    '销售：这款轻茶适合日常喝。',
+    '客户：和普通乌龙茶有什么区别？',
+    '销售：更强调低负担饮用体验。',
+    '客户：多少钱？',
+    '销售：169元。',
+    '客户：如果喝了没效果怎么办？',
+    '销售：体验因人而异。',
+    '客户：那你建议我怎么选？',
+  ].join('\n'), embeddingConfig(), {
+    organizationId: 'org-a',
+    ownerId: 'demo-user',
+    limit: 4,
+    vectorIndex,
+  });
+
+  const ids = result.map((item) => item.id);
+  assert.equal(ids.includes('meta-1'), false);
+  assert.equal(ids.includes('meta-2'), false);
+  assert.equal(ids.includes('product'), true);
+  assert.equal(ids.includes('competitor'), true);
+  assert.equal(ids.includes('price'), true);
 });
