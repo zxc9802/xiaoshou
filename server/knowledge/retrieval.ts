@@ -2,6 +2,7 @@ import type { KnowledgeEntry } from '../../shared/contracts.js';
 import type { AppConfig } from '../config.js';
 import type { KnowledgeVectorIndex } from '../infrastructure/vectorIndex.js';
 import { createKnowledgeEmbedding, formatRetrievalQuery } from '../model/embeddings.js';
+import { isKnowledgeRetrievalEligible } from './eligibility.js';
 
 function tokens(value: string) {
   const normalized = value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
@@ -40,14 +41,18 @@ export async function retrieveKnowledge(
   const effective = (entry: KnowledgeEntry) =>
     (!entry.effectiveFrom || new Date(entry.effectiveFrom) <= now)
     && (!entry.effectiveTo || new Date(entry.effectiveTo) >= now);
-  const published = entries.filter((entry) => entry.status === 'published' && !entry.deletedAt && effective(entry));
+  const published = entries.filter((entry) =>
+    entry.status === 'published'
+    && !entry.deletedAt
+    && effective(entry)
+    && isKnowledgeRetrievalEligible(entry),
+  );
   const mandatory = published.filter((entry) =>
     entry.layer === 'L0'
     || entry.layer === 'L1'
     || (entry.layer === 'L4' && entry.structuredData?.ownerId === options.ownerId),
   );
   const eligible = published.filter((entry) => entry.layer === 'L2' || entry.layer === 'L3');
-  const byId = new Map(eligible.map((entry) => [entry.id, entry]));
   const queryTokens = tokens(query);
   let denseHits: Awaited<ReturnType<KnowledgeVectorIndex['search']>> | undefined;
 
@@ -71,10 +76,7 @@ export async function retrieveKnowledge(
   for (const hit of denseHits ?? []) {
     denseByEntry.set(hit.entryId, Math.max(denseByEntry.get(hit.entryId) ?? 0, hit.score));
   }
-  const candidates = denseByEntry.size
-    ? [...denseByEntry.keys()].map((id) => byId.get(id)).filter((entry): entry is KnowledgeEntry => Boolean(entry))
-    : eligible;
-  const ranked = candidates.map((entry) => {
+  const ranked = eligible.map((entry) => {
     const entryTokens = tokens(`${entry.title}\n${entry.category}\n${entry.content}`);
     const matches = [...queryTokens].filter((token) => entryTokens.has(token)).length;
     const lexical = queryTokens.size ? matches / Math.sqrt(queryTokens.size * Math.max(1, entryTokens.size)) : 0;
@@ -86,7 +88,10 @@ export async function retrieveKnowledge(
         : dense * 0.7 + lexical * 0.3 + categoryBoost(query, entry),
     };
   }).sort((left, right) => right.score - left.score);
-  const tactics = ranked.filter((item) => item.entry.layer === 'L2').slice(0, Math.min(4, limit)).map((item) => item.entry);
+  const tactics = ranked
+    .filter((item) => item.entry.layer === 'L2' && item.score > 0)
+    .slice(0, Math.min(4, limit))
+    .map((item) => item.entry);
   const facts = ranked.filter((item) => item.entry.layer === 'L3' && item.score > 0).slice(0, Math.max(1, limit - tactics.length)).map((item) => item.entry);
   return [...new Map([...mandatory, ...tactics, ...facts].map((entry) => [entry.id, entry])).values()];
 }
