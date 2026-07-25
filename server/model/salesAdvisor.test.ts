@@ -155,7 +155,11 @@ test('disabled analysis prompt omits knowledge content and citation instructions
   assert.ok(buildSalesAdvicePrompt, 'buildSalesAdvicePrompt must expose both prompt modes');
   const transcript = parseConversationText('客户：课程能解决什么问题？');
   const baseline = analyzeWithRules(transcript, []);
-  const source = { ...DEFAULT_KNOWLEDGE[0]!, id: 'sentinel-source', content: 'SENTINEL_KNOWLEDGE_CONTENT' };
+  const source = {
+    id: 'sentinel-source', origin: 'manual' as const, locked: false, layer: 'L3' as const,
+    category: '产品资料', title: '测试资料', content: 'SENTINEL_KNOWLEDGE_CONTENT', version: '1.0',
+    status: 'published' as const, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+  };
   const prompt = buildSalesAdvicePrompt(baseline, transcript, [source], { conversation: '课程咨询', attachmentNames: [] }, false);
 
   assert.doesNotMatch(prompt, /SENTINEL_KNOWLEDGE_CONTENT/);
@@ -168,7 +172,11 @@ test('enabled analysis prompt retains knowledge content and citation instruction
   assert.ok(buildSalesAdvicePrompt, 'buildSalesAdvicePrompt must expose both prompt modes');
   const transcript = parseConversationText('客户：课程能解决什么问题？');
   const baseline = analyzeWithRules(transcript, []);
-  const source = { ...DEFAULT_KNOWLEDGE[0]!, id: 'sentinel-source', content: 'SENTINEL_KNOWLEDGE_CONTENT' };
+  const source = {
+    id: 'sentinel-source', origin: 'manual' as const, locked: false, layer: 'L3' as const,
+    category: '产品资料', title: '测试资料', content: 'SENTINEL_KNOWLEDGE_CONTENT', version: '1.0',
+    status: 'published' as const, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+  };
   const prompt = buildSalesAdvicePrompt(baseline, transcript, [source], { conversation: '课程咨询', attachmentNames: [] }, true);
 
   assert.match(prompt, /SENTINEL_KNOWLEDGE_CONTENT/);
