@@ -16,40 +16,40 @@ class RecordingIndexScheduler implements KnowledgeIndexScheduler {
   async scheduleDelete(organizationId: string, entryId: string) { this.deletes.push({ organizationId, entryId }); }
 }
 
-test('system baseline is complete, locked, and excludes disabled demo facts', async () => {
+test('initialization removes legacy system-locked knowledge and keeps enterprise knowledge', async () => {
   const repository = new MemoryRepository();
-  const service = new KnowledgeService(repository, new MemoryObjectStorage(), config);
+  const scheduler = new RecordingIndexScheduler();
+  const service = new KnowledgeService(repository, new MemoryObjectStorage(), config, scheduler);
+  const now = new Date().toISOString();
+  await repository.createKnowledge(actor.organizationId, {
+    id: 'enterprise-knowledge', origin: 'manual', locked: false, layer: 'L3', category: '产品资料',
+    title: '企业自建资料', content: '仅保留企业自行维护的资料。', version: '1.0', status: 'published',
+    createdAt: now, updatedAt: now,
+  });
+  await repository.createKnowledge(actor.organizationId, {
+    id: 'legacy-system-knowledge', origin: 'system', locked: true, layer: 'L2', category: '销售技巧',
+    title: '旧系统策略', content: '不应继续保留。', version: '1.0', status: 'published',
+    createdAt: now, updatedAt: now,
+  });
   await service.initializeKnowledge(actor.organizationId);
   const entries = await service.list(actor.organizationId);
-  const systemEntries = entries.filter((entry) => entry.origin === 'system');
-  assert.equal(systemEntries.filter((entry) => entry.layer === 'L2').length, 18);
-  assert.ok(systemEntries.every((entry) => entry.locked));
-  assert.equal(entries.some((entry) => entry.title === '企业版产品说明'), false);
-  const strategy = systemEntries.find((entry) => entry.title === '价格异议处理策略');
-  assert.ok(strategy);
-  await assert.rejects(() => service.update(actor.organizationId, strategy.id, { title: '不能修改' }), /系统通用条目已锁定/);
-  await assert.rejects(() => service.trashEntries(actor, [strategy.id]), /系统通用条目不能删除/);
+  assert.equal(entries.some((entry) => entry.origin === 'system' || entry.locked), false);
+  assert.ok(entries.some((entry) => entry.id === 'enterprise-knowledge'));
+  assert.ok(scheduler.deletes.length > 0);
 });
 
-test('system entries can be copied and user entries support trash, restore, and purge', async () => {
+test('enterprise entries support trash, restore, and purge', async () => {
   const repository = new MemoryRepository();
   const storage = new MemoryObjectStorage();
   const service = new KnowledgeService(repository, storage, config);
-  await service.initializeKnowledge(actor.organizationId);
-  const systemEntry = (await service.list(actor.organizationId)).find((entry) => entry.title === '客户信任异议处理');
-  assert.ok(systemEntry);
-  const copy = await service.copySystemEntry(actor, systemEntry.id);
-  assert.equal(copy.origin, 'manual');
-  assert.equal(copy.locked, false);
-  assert.equal(copy.status, 'draft');
-
+  const first = await service.create(actor.organizationId, { layer: 'L2', category: '销售技巧', title: '企业自建策略', content: '企业自行维护的策略。' });
   const second = await service.create(actor.organizationId, { layer: 'L3', category: '产品资料', title: '企业自建资料', content: '企业已审核内容。' });
-  const trash = await service.trashEntries(actor, [copy.id, second.id]);
-  assert.ok(trash.some((entry) => entry.id === copy.id && entry.purgeAt));
-  assert.equal((await service.list(actor.organizationId)).some((entry) => entry.id === copy.id), false);
+  const trash = await service.trashEntries(actor, [first.id, second.id]);
+  assert.ok(trash.some((entry) => entry.id === first.id && entry.purgeAt));
+  assert.equal((await service.list(actor.organizationId)).some((entry) => entry.id === first.id), false);
 
-  await service.restoreEntries(actor, [copy.id]);
-  assert.ok((await service.list(actor.organizationId)).some((entry) => entry.id === copy.id && !entry.deletedAt));
+  await service.restoreEntries(actor, [first.id]);
+  assert.ok((await service.list(actor.organizationId)).some((entry) => entry.id === first.id && !entry.deletedAt));
   await service.permanentlyDelete(actor, second.id);
   assert.equal(await repository.getKnowledge(second.id), undefined);
   const audits = await repository.listAudit(actor.organizationId, 20);
@@ -58,7 +58,7 @@ test('system entries can be copied and user entries support trash, restore, and 
   assert.ok(audits.some((record) => record.action === 'knowledge.purge'));
 });
 
-test('expired trash is purged automatically while active and system entries remain', async () => {
+test('expired enterprise trash is purged automatically', async () => {
   const repository = new MemoryRepository();
   const service = new KnowledgeService(repository, new MemoryObjectStorage(), config);
   await service.initializeKnowledge(actor.organizationId);
@@ -69,7 +69,7 @@ test('expired trash is purged automatically while active and system entries rema
   await repository.updateKnowledge(actor.organizationId, { ...trashed, purgeAt: '2020-01-01T00:00:00.000Z' });
   await service.purgeExpiredTrash(actor.organizationId);
   assert.equal(await repository.getKnowledge(entry.id), undefined);
-  assert.ok((await service.list(actor.organizationId)).some((item) => item.origin === 'system'));
+  assert.equal((await service.list(actor.organizationId)).length, 0);
 });
 
 test('published L2/L3 lifecycle schedules upserts and removals while L4 stays outside Qdrant', async () => {

@@ -6,7 +6,6 @@ import { analyzeKnowledgeFile } from './knowledge/contentAnalyzer.js';
 import { analyzeChampionChat } from './knowledge/mediaAnalyzer.js';
 import { buildKnowledgeCandidates, mergeCandidates, splitCandidate } from './knowledge/importBuilder.js';
 import type { KnowledgeIndexScheduler } from './knowledgeIndexService.js';
-import { DEFAULT_KNOWLEDGE, RETIRED_SYSTEM_KNOWLEDGE_KEYS, SYSTEM_KNOWLEDGE_TITLES } from './knowledge/defaults.js';
 import { ProductService } from './productService.js';
 
 function safeFileName(value: string) {
@@ -39,38 +38,10 @@ export class KnowledgeService {
   async initializeKnowledge(organizationId = 'default-org') {
     const existing = await this.repository.listKnowledge(organizationId);
     for (const entry of existing) {
-      if (entry.systemKey && RETIRED_SYSTEM_KNOWLEDGE_KEYS.has(entry.systemKey)) {
+      if (isSystemLocked(entry)) {
         await this.repository.deleteKnowledge(organizationId, entry.id);
+        if (entry.layer === 'L2' || entry.layer === 'L3') await this.indexScheduler.scheduleDelete(organizationId, entry.id);
       }
-    }
-    const migratedSystemIds = new Set<string>();
-    for (const definition of DEFAULT_KNOWLEDGE) {
-      const current = existing.find((entry) => entry.systemKey === definition.systemKey)
-        ?? existing.find((entry) => entry.reviewer === '系统内置' && entry.title === definition.title);
-      if (current) {
-        migratedSystemIds.add(current.id);
-        await this.repository.updateKnowledge(organizationId, {
-          ...current,
-          ...definition,
-          id: current.id,
-          createdAt: current.createdAt,
-          updatedAt: new Date().toISOString(),
-          structuredData: { ...current.structuredData, ...definition.structuredData },
-        });
-      } else {
-        await this.repository.createKnowledge(organizationId, definition);
-        migratedSystemIds.add(definition.id);
-      }
-    }
-    for (const entry of existing) {
-      if (migratedSystemIds.has(entry.id) || entry.origin) continue;
-      const legacySystem = entry.reviewer === '系统内置' && SYSTEM_KNOWLEDGE_TITLES.has(entry.title);
-      await this.repository.updateKnowledge(organizationId, {
-        ...entry,
-        origin: legacySystem ? 'system' : entry.structuredData?.importJobId ? 'import' : 'manual',
-        locked: legacySystem,
-        updatedAt: new Date().toISOString(),
-      });
     }
   }
 
