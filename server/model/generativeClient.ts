@@ -1,4 +1,9 @@
 import type { AppConfig } from '../config.js';
+import {
+  MainAppBillingError,
+  parseModelUsage,
+  reserveTextCredits,
+} from '../mainAppBilling.js';
 
 export interface ModelMediaInput {
   name: string;
@@ -92,17 +97,36 @@ async function generateOpenAIJson(config: AppConfig, input: Required<Pick<Genera
     if (item.mimeType.startsWith('image/')) content.push({ type: 'image_url', image_url: { url: `data:${item.mimeType};base64,${item.data.toString('base64')}` } });
     else if (item.mimeType.startsWith('audio/')) content.push({ type: 'input_audio', input_audio: { data: item.data.toString('base64'), format: item.mimeType.includes('wav') ? 'wav' : 'mp3' } });
   }
-  const body = await fetchJson(`${config.modelBaseUrl!.replace(/\/$/, '')}/chat/completions`, config, {
-    method: 'POST',
-    signal: AbortSignal.timeout(input.timeoutMs),
-    body: JSON.stringify({
-      model: input.model,
-      temperature: 0,
-      response_format: { type: 'json_object' },
-      messages: [{ role: 'user', content }],
-    }),
-  }) as { choices?: Array<{ message?: { content?: string } }> };
-  return normalizeJsonText(body.choices?.[0]?.message?.content ?? '{}');
+  const maxOutputTokens = 8_192;
+  const estimatedInputTokens = new TextEncoder().encode(input.prompt).length
+    + input.media.length * 4_000;
+  const billing = await reserveTextCredits({
+    operation: 'generate-json',
+    providerId: 'openai-compatible',
+    model: input.model,
+    estimatedInputTokens,
+    maxOutputTokens,
+  });
+  try {
+    const body = await fetchJson(`${config.modelBaseUrl!.replace(/\/$/, '')}/chat/completions`, config, {
+      method: 'POST',
+      signal: AbortSignal.timeout(input.timeoutMs),
+      body: JSON.stringify({
+        model: input.model,
+        temperature: 0,
+        response_format: { type: 'json_object' },
+        max_tokens: maxOutputTokens,
+        messages: [{ role: 'user', content }],
+      }),
+    }) as { choices?: Array<{ message?: { content?: string } }> };
+    const outputText = body.choices?.[0]?.message?.content ?? '{}';
+    await billing.settle(parseModelUsage(body, { inputTokens: estimatedInputTokens, outputText }));
+    return normalizeJsonText(outputText);
+  } catch (error) {
+    if (error instanceof MainAppBillingError) throw error;
+    await billing.release();
+    throw error;
+  }
 }
 
 async function generateGeminiJson(config: AppConfig, input: Required<Pick<GenerateJsonInput, 'model' | 'prompt' | 'timeoutMs'>> & { media: ModelMediaInput[] }) {
@@ -111,15 +135,37 @@ async function generateGeminiJson(config: AppConfig, input: Required<Pick<Genera
     parts.push({ inline_data: { mime_type: item.mimeType, data: item.data.toString('base64') } });
     if (item.timestampSeconds != null) parts.push({ text: `上一份关键帧时间点：${item.timestampSeconds}秒` });
   }
-  const body = await fetchJson(geminiEndpoint(config.modelBaseUrl!, input.model), config, {
-    method: 'POST',
-    signal: AbortSignal.timeout(input.timeoutMs),
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts }],
-      generationConfig: { temperature: 0, responseMimeType: 'application/json' },
-    }),
-  }) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-  return normalizeJsonText(body.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('') ?? '{}');
+  const maxOutputTokens = 8_192;
+  const estimatedInputTokens = new TextEncoder().encode(input.prompt).length
+    + input.media.length * 4_000;
+  const billing = await reserveTextCredits({
+    operation: 'generate-json',
+    providerId: 'gemini',
+    model: input.model,
+    estimatedInputTokens,
+    maxOutputTokens,
+  });
+  try {
+    const body = await fetchJson(geminiEndpoint(config.modelBaseUrl!, input.model), config, {
+      method: 'POST',
+      signal: AbortSignal.timeout(input.timeoutMs),
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts }],
+        generationConfig: {
+          temperature: 0,
+          responseMimeType: 'application/json',
+          maxOutputTokens,
+        },
+      }),
+    }) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+    const outputText = body.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('') ?? '{}';
+    await billing.settle(parseModelUsage(body, { inputTokens: estimatedInputTokens, outputText }));
+    return normalizeJsonText(outputText);
+  } catch (error) {
+    if (error instanceof MainAppBillingError) throw error;
+    await billing.release();
+    throw error;
+  }
 }
 
 export async function generateJsonText(config: AppConfig, input: GenerateJsonInput) {

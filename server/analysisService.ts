@@ -10,6 +10,7 @@ import { cropCustomerAvatar } from './customerAvatar.js';
 import { retrieveKnowledge } from './knowledge/retrieval.js';
 import { generateSalesAdvice } from './model/salesAdvisor.js';
 import { analyzeWithRules, buildClarifications } from './rules/analysisEngine.js';
+import { runWithMainAppBillingUser } from './mainAppBilling.js';
 
 const pause = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const FOLLOW_UP_INTERVAL_MS = 72 * 60 * 60 * 1000;
@@ -139,7 +140,10 @@ export class AnalysisService {
     if (!job) throw new Error('该客户没有可重新识别的聊天截图');
     const images: ImageInput[] = [];
     for (const attachment of job.attachments.filter((item) => item.mimeType.startsWith('image/'))) images.push({ name: attachment.name, mimeType: attachment.mimeType, data: await this.storage.get(attachment.key) });
-    const parsed = await this.parser.parse(job.request.conversation, images);
+    const parsed = await runWithMainAppBillingUser(
+      job.createdBy,
+      () => this.parser.parse(job.request.conversation, images),
+    );
     if (!parsed.customerIdentity) throw new Error('截图中没有识别到可靠的客户身份或头像');
     job.transcript = job.transcript ? { ...job.transcript, customerIdentity: parsed.customerIdentity } : parsed;
     job.customerAvatarKey = undefined;
@@ -264,7 +268,10 @@ export class AnalysisService {
       if (!alreadyClaimed) await this.save(job, 'parsing', 18, '正在识别对话与隐私信息');
       const images: ImageInput[] = [];
       for (const attachment of job.attachments) images.push({ name: attachment.name, mimeType: attachment.mimeType, data: await this.storage.get(attachment.key) });
-      const transcript = await this.parser.parse(job.request.conversation, images);
+      const transcript = await runWithMainAppBillingUser(
+        job.createdBy,
+        () => this.parser.parse(job.request.conversation, images),
+      );
       job.transcript = transcript;
       await this.syncCustomerIdentity(job, images);
       const clarificationQuestions = buildClarifications(transcript);
@@ -299,7 +306,10 @@ export class AnalysisService {
       await this.save(job, 'generating', 78, this.config.analysisKnowledgeEnabled ? '正在生成回复与后续动作' : '正在使用AI生成销管建议');
       const baseline = analyzeWithRules(job.transcript, knowledge, job.clarificationQuestions, job.createdBy);
       const result = this.config.modelDriver === 'openai_compatible'
-        ? await generateSalesAdvice(this.config, baseline, job.transcript, knowledge, job.request)
+        ? await runWithMainAppBillingUser(
+            job.createdBy,
+            () => generateSalesAdvice(this.config, baseline, job.transcript!, knowledge, job.request),
+          )
         : baseline;
       await pause(120);
       job.result = result;

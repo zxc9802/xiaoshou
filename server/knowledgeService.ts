@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { runWithMainAppBillingUser } from './mainAppBilling.js';
 import type { KnowledgeCandidate, KnowledgeEntry, KnowledgeImportContext, KnowledgeImportJob, KnowledgeLayer, KnowledgeMediaAsset, KnowledgeStatus, KnowledgeSourceFile, SalesStyleProfile } from '../shared/contracts.js';
 import type { ObjectStorage, Repository, RequestActor, StoredKnowledgeImportJob } from './domain.js';
 import type { AppConfig } from './config.js';
@@ -163,7 +164,10 @@ export class KnowledgeService {
         const file = files[index];
         const sourceFile = job.sourceFiles[index];
         if (!file || !sourceFile || sourceFile.status === 'failed') continue;
-        const analysis = await analyzeKnowledgeFile(file, this.config);
+        const analysis = await runWithMainAppBillingUser(
+          job.createdBy,
+          () => analyzeKnowledgeFile(file, this.config),
+        );
         sourceFile.status = 'extracted'; sourceFile.extractionMethod = analysis.extractionMethod; sourceFile.textLength = (analysis.normalizedContent || analysis.summary).length; sourceFile.warnings = analysis.warnings; sourceFile.createdAt ||= new Date().toISOString();
         job.candidates.push(...buildKnowledgeCandidates(sourceFile, analysis));
         await this.repository.updateKnowledgeImport(job);
@@ -193,7 +197,10 @@ export class KnowledgeService {
         const sources = await Promise.all(ordered.map(async (source) => ({ source, data: await this.storage.get(source.storageKey) })));
         for (const source of ordered) source.analysisStatus = 'processing';
         job.progress = 45; job.progressLabel = '正在识别销冠对话、角色与隐私信息'; await this.repository.updateKnowledgeImport(job);
-        const result = await analyzeChampionChat(sources, this.config, job.context);
+        const result = await runWithMainAppBillingUser(
+          job.createdBy,
+          () => analyzeChampionChat(sources, this.config, job.context!),
+        );
         job.candidates = result.candidates;
         job.documentSections = result.sections;
         job.transcript = result.transcript;
@@ -210,17 +217,20 @@ export class KnowledgeService {
         const sourceFile = job.sourceFiles[fileIndex]!;
         try {
           const data = await this.storage.get(sourceFile.storageKey);
-          const analysis = await analyzeKnowledgeFile({ name: sourceFile.name, mimeType: sourceFile.mimeType, data }, this.config, {
-            sourceFileId: sourceFile.id,
-            context: job.context,
-            onProgress: async (current, total, label) => {
-              const completedFiles = fileIndex / Math.max(1, job.sourceFiles.length);
-              const currentFile = (current / Math.max(1, total)) / Math.max(1, job.sourceFiles.length);
-              job.progress = Math.min(88, Math.round(20 + (completedFiles + currentFile) * 68));
-              job.progressLabel = label; job.updatedAt = new Date().toISOString();
-              await this.repository.updateKnowledgeImport(job);
-            },
-          });
+          const analysis = await runWithMainAppBillingUser(
+            job.createdBy,
+            () => analyzeKnowledgeFile({ name: sourceFile.name, mimeType: sourceFile.mimeType, data }, this.config, {
+              sourceFileId: sourceFile.id,
+              context: job.context,
+              onProgress: async (current, total, label) => {
+                const completedFiles = fileIndex / Math.max(1, job.sourceFiles.length);
+                const currentFile = (current / Math.max(1, total)) / Math.max(1, job.sourceFiles.length);
+                job.progress = Math.min(88, Math.round(20 + (completedFiles + currentFile) * 68));
+                job.progressLabel = label; job.updatedAt = new Date().toISOString();
+                await this.repository.updateKnowledgeImport(job);
+              },
+            }),
+          );
           sourceFile.status = 'extracted'; sourceFile.analysisStatus = analysis.warnings.length ? 'needs_review' : 'completed'; sourceFile.extractionMethod = analysis.extractionMethod;
           sourceFile.transcript = analysis.transcript;
           sourceFile.keyFrames = analysis.keyFrames;
