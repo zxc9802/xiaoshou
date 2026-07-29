@@ -303,31 +303,31 @@ app.get('/api/v1/knowledge/export', async (request, reply) => {
   const exported = await knowledge.exportKnowledge(current.organizationId, format);
   return reply.type(exported.contentType).header('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(exported.fileName)}`).send(exported.content);
 });
-app.get('/api/v1/knowledge/imports', async (request) => { const current = requireAdmin(request); const query = request.query as { limit?: string }; return knowledge.listImports(current, Math.min(Number(query.limit ?? 20), 100)); });
+app.get('/api/v1/knowledge/imports', async (request) => { const current = actor(request); const query = request.query as { limit?: string }; return knowledge.listImports(current, Math.min(Number(query.limit ?? 20), 100)); });
 app.post('/api/v1/knowledge/imports', async (request, reply) => {
-  const current = requireAdmin(request);
+  const current = actor(request);
   const { files, context } = await readKnowledgeImportRequest(request);
   const job = await knowledge.createImport(current, files, context);
   await repository.addAudit({ id: randomUUID(), organizationId: current.organizationId, userId: current.userId, action: 'knowledge.import.create', targetType: 'knowledge_import', targetId: job.id, metadata: { fileCount: files.length, candidateCount: job.candidates.length, status: job.status }, createdAt: new Date().toISOString() });
   return reply.code(202).send(job);
 });
 app.post('/api/v1/knowledge/imports/uploads', async (request, reply) => {
-  const current = requireAdmin(request);
+  const current = actor(request);
   const body = z.object({ fileName: z.string().min(1).max(240), mimeType: z.string().regex(/^video\//), totalSize: z.number().int().positive().max(500 * 1024 * 1024), chunkSize: z.number().int().min(1024 * 1024).max(10 * 1024 * 1024), totalChunks: z.number().int().positive().max(500), context: knowledgeImportContextSchema.optional() }).parse(request.body ?? {});
   return reply.code(201).send(await knowledge.initializeChunkedImport(current, body));
 });
 app.post('/api/v1/knowledge/imports/uploads/:id/chunks/:index', async (request) => {
-  const current = requireAdmin(request);
+  const current = actor(request);
   if (!request.isMultipart()) throw new Error('请上传视频分片');
   const part = await request.file({ limits: { files: 1, fileSize: 10 * 1024 * 1024 } });
   if (!part) throw new Error('视频分片为空');
   const params = request.params as { id: string; index: string };
   return knowledge.uploadImportChunk(current, params.id, Number(params.index), await part.toBuffer());
 });
-app.post('/api/v1/knowledge/imports/uploads/:id/complete', async (request) => knowledge.completeChunkedImport(requireAdmin(request), (request.params as { id: string }).id));
-app.get('/api/v1/knowledge/imports/:id', async (request) => knowledge.getImport(requireAdmin(request), (request.params as { id: string }).id));
+app.post('/api/v1/knowledge/imports/uploads/:id/complete', async (request) => knowledge.completeChunkedImport(actor(request), (request.params as { id: string }).id));
+app.get('/api/v1/knowledge/imports/:id', async (request) => knowledge.getImport(actor(request), (request.params as { id: string }).id));
 app.post('/api/v1/knowledge/imports/:id/reparse', async (request) => {
-  const current = requireAdmin(request);
+  const current = actor(request);
   const job = await knowledge.reparseImport(current, (request.params as { id: string }).id);
   await repository.addAudit({ id: randomUUID(), organizationId: current.organizationId, userId: current.userId, action: 'knowledge.import.reparse', targetType: 'knowledge_import', targetId: job.id, metadata: { parentImportId: job.parentImportId, revisionNumber: job.revisionNumber }, createdAt: new Date().toISOString() });
   return job;
@@ -364,25 +364,25 @@ const candidateSchema: z.ZodType<KnowledgeCandidate> = z.object({
   updatedAt: z.string(),
 });
 app.post('/api/v1/knowledge/imports/:id/confirm', async (request) => {
-  const current = requireAdmin(request); const schema = z.object({ candidates: z.array(candidateSchema).optional() });
+  const current = actor(request); const schema = z.object({ candidates: z.array(candidateSchema).optional() });
   const job = await knowledge.confirmImport(current, (request.params as { id: string }).id, schema.parse(request.body ?? {}).candidates);
   await repository.addAudit({ id: randomUUID(), organizationId: current.organizationId, userId: current.userId, action: 'knowledge.import.confirm', targetType: 'knowledge_import', targetId: job.id, metadata: { publishedEntryIds: job.publishedEntryIds, candidateCount: job.candidates.length }, createdAt: new Date().toISOString() });
   return job;
 });
 app.post('/api/v1/knowledge/imports/:id/candidates/:candidateId/discard', async (request) => {
-  const current = requireAdmin(request); const params = request.params as { id: string; candidateId: string };
+  const current = actor(request); const params = request.params as { id: string; candidateId: string };
   return knowledge.discardCandidate(current, params.id, params.candidateId);
 });
 app.post('/api/v1/knowledge/imports/:id/candidates/:candidateId/split', async (request) => {
-  const current = requireAdmin(request); const params = request.params as { id: string; candidateId: string };
+  const current = actor(request); const params = request.params as { id: string; candidateId: string };
   return knowledge.splitCandidate(current, params.id, params.candidateId);
 });
 app.post('/api/v1/knowledge/imports/:id/candidates/:candidateId/merge', async (request) => {
-  const current = requireAdmin(request); const params = request.params as { id: string; candidateId: string };
+  const current = actor(request); const params = request.params as { id: string; candidateId: string };
   const body = z.object({ sourceCandidateId: z.string().min(1) }).parse(request.body ?? {});
   return knowledge.mergeCandidates(current, params.id, params.candidateId, body.sourceCandidateId);
 });
-app.post('/api/v1/knowledge', async (request, reply) => { const current = requireAdmin(request); const schema = z.object({ layer: z.enum(['L2', 'L3', 'L4']), category: z.string().min(1), title: z.string().min(1), content: z.string().min(1), version: z.string().optional(), structuredData: z.record(z.string(), z.unknown()).optional() }); return reply.code(201).send(await knowledge.create(current.organizationId, schema.parse(request.body))); });
+app.post('/api/v1/knowledge', async (request, reply) => { const current = actor(request); const schema = z.object({ layer: z.enum(['L2', 'L3', 'L4']), category: z.string().min(1), title: z.string().min(1), content: z.string().min(1), version: z.string().optional(), structuredData: z.record(z.string(), z.unknown()).optional() }); return reply.code(201).send(await knowledge.create(current.organizationId, schema.parse(request.body))); });
 app.post('/api/v1/knowledge/:id/copy', async (request, reply) => reply.code(201).send(await knowledge.copySystemEntry(requireAdmin(request), (request.params as { id: string }).id)));
 app.post('/api/v1/knowledge/batch-trash', async (request) => {
   const body = z.object({ ids: z.array(z.string().min(1)).min(1).max(200) }).parse(request.body ?? {});
@@ -397,7 +397,7 @@ app.delete('/api/v1/knowledge/:id', async (request, reply) => {
   return reply.code(204).send();
 });
 app.post('/api/v1/knowledge/:id/media', async (request, reply) => {
-  const current = requireAdmin(request);
+  const current = actor(request);
   if (!request.isMultipart()) throw new Error('请上传图片或视频');
   const part = await request.file({ limits: { files: 1, fileSize: 25 * 1024 * 1024 } });
   if (!part) throw new Error('请上传图片或视频');
@@ -409,11 +409,11 @@ app.get('/api/v1/knowledge/:id/media/:mediaId', async (request, reply) => {
   const { asset, data } = await knowledge.getMedia(actor(request), params.id, params.mediaId);
   return reply.type(asset.mimeType).header('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(asset.name)}`).send(data);
 });
-app.post('/api/v1/knowledge/upload', async (request, reply) => { const current = requireAdmin(request); if (!request.isMultipart()) throw new Error('请上传内容文件'); const part = await request.file({ limits: { files: 1, fileSize: 25 * 1024 * 1024 } }); if (!part) throw new Error('请上传内容文件'); if (/\.(exe|dll|msi|bat|cmd|com|scr|ps1)$/i.test(part.filename)) throw new Error('不支持上传可执行程序或脚本文件'); const data = await part.toBuffer(); const entry = await knowledge.upload(current.organizationId, { name: part.filename, mimeType: part.mimetype || 'application/octet-stream', data }); await repository.addAudit({ id: randomUUID(), organizationId: current.organizationId, userId: current.userId, action: 'knowledge.ingest', targetType: 'knowledge', targetId: entry.id, metadata: { fileName: part.filename, suggestedLayer: entry.layer, suggestedCategory: entry.category }, createdAt: new Date().toISOString() }); return reply.code(201).send(entry); });
-app.patch('/api/v1/knowledge/:id', async (request) => { const current = requireAdmin(request); return knowledge.update(current.organizationId, (request.params as { id: string }).id, request.body as Record<string, unknown>); });
-app.post('/api/v1/knowledge/:id/publish', async (request) => { const current = requireAdmin(request); return knowledge.setStatus(current.organizationId, (request.params as { id: string }).id, 'published', current.userId); });
-app.post('/api/v1/knowledge/:id/archive', async (request) => { const current = requireAdmin(request); return knowledge.setStatus(current.organizationId, (request.params as { id: string }).id, 'archived', current.userId); });
-app.post('/api/v1/knowledge/:id/confirm-classification', async (request) => { const current = requireAdmin(request); const schema = z.object({ layer: z.enum(['L2', 'L3']), category: z.string().min(1).max(80), title: z.string().min(1).max(160), content: z.string().min(1).max(50_000), version: z.string().min(1).max(40) }); const entry = await knowledge.confirmClassification(current.organizationId, (request.params as { id: string }).id, schema.parse(request.body), current.userId); await repository.addAudit({ id: randomUUID(), organizationId: current.organizationId, userId: current.userId, action: 'knowledge.classification.confirm', targetType: 'knowledge', targetId: entry.id, metadata: { layer: entry.layer, category: entry.category, version: entry.version }, createdAt: new Date().toISOString() }); return entry; });
+app.post('/api/v1/knowledge/upload', async (request, reply) => { const current = actor(request); if (!request.isMultipart()) throw new Error('请上传内容文件'); const part = await request.file({ limits: { files: 1, fileSize: 25 * 1024 * 1024 } }); if (!part) throw new Error('请上传内容文件'); if (/\.(exe|dll|msi|bat|cmd|com|scr|ps1)$/i.test(part.filename)) throw new Error('不支持上传可执行程序或脚本文件'); const data = await part.toBuffer(); const entry = await knowledge.upload(current.organizationId, { name: part.filename, mimeType: part.mimetype || 'application/octet-stream', data }); await repository.addAudit({ id: randomUUID(), organizationId: current.organizationId, userId: current.userId, action: 'knowledge.ingest', targetType: 'knowledge', targetId: entry.id, metadata: { fileName: part.filename, suggestedLayer: entry.layer, suggestedCategory: entry.category }, createdAt: new Date().toISOString() }); return reply.code(201).send(entry); });
+app.patch('/api/v1/knowledge/:id', async (request) => { const current = actor(request); return knowledge.update(current.organizationId, (request.params as { id: string }).id, request.body as Record<string, unknown>); });
+app.post('/api/v1/knowledge/:id/publish', async (request) => { const current = actor(request); return knowledge.setStatus(current.organizationId, (request.params as { id: string }).id, 'published', current.userId); });
+app.post('/api/v1/knowledge/:id/archive', async (request) => { const current = actor(request); return knowledge.setStatus(current.organizationId, (request.params as { id: string }).id, 'archived', current.userId); });
+app.post('/api/v1/knowledge/:id/confirm-classification', async (request) => { const current = actor(request); const schema = z.object({ layer: z.enum(['L2', 'L3']), category: z.string().min(1).max(80), title: z.string().min(1).max(160), content: z.string().min(1).max(50_000), version: z.string().min(1).max(40) }); const entry = await knowledge.confirmClassification(current.organizationId, (request.params as { id: string }).id, schema.parse(request.body), current.userId); await repository.addAudit({ id: randomUUID(), organizationId: current.organizationId, userId: current.userId, action: 'knowledge.classification.confirm', targetType: 'knowledge', targetId: entry.id, metadata: { layer: entry.layer, category: entry.category, version: entry.version }, createdAt: new Date().toISOString() }); return entry; });
 const styleSchema = z.object({ customerAddressing: z.string().max(20), commonParticles: z.array(z.string().max(10)).max(8), emojis: z.array(z.string().max(8)).max(8), punctuation: z.enum(['简洁', '自然', '正式']), messageSplitting: z.enum(['单条', '分条']), referenceMessages: z.array(z.string().max(500)).max(5) });
 app.get('/api/v1/profile/style', async (request) => knowledge.getPersonalStyle(actor(request)));
 app.put('/api/v1/profile/style', async (request) => { const current = actor(request); const profile = styleSchema.parse(request.body); const entry = await knowledge.savePersonalStyle(current, profile); await repository.addAudit({ id: randomUUID(), organizationId: current.organizationId, userId: current.userId, action: 'profile.style.update', targetType: 'knowledge', targetId: entry.id, createdAt: new Date().toISOString() }); return profile; });
