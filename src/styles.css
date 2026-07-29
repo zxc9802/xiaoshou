@@ -707,6 +707,7 @@ textarea::placeholder { color: #9aaa9f; }
 .knowledge-filter-groups .knowledge-filters .add-category-filter { display: inline-flex; align-items: center; gap: 6px; color: #2f7d59; border-color: #b9d9c4; background: #f5fbf7; font-weight: 750; }
 .knowledge-filter-groups .knowledge-filters .add-category-filter svg { width: 15px; }
 .pending-review-button:not(:disabled) { color: #1f6a49; border-color: #96caa8; background: #e7f4eb; font-weight: 750; }
+.knowledge-import-progress { color: #4d7460; font-size: 13px; white-space: nowrap; }
 .knowledge-search-row { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 12px; padding-bottom: 2px; }
 .knowledge-search-row input { width: 100%; padding: 13px 15px; border: 1px solid #cfe0d5; border-radius: 13px; color: #365a49; background: rgba(255,255,252,.96); font-size: 15px; outline: none; }
 .knowledge-search-row input:focus { border-color: #8bc9a1; box-shadow: 0 0 0 3px rgba(47,125,89,.10); }

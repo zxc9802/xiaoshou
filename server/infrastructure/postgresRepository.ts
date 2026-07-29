@@ -85,8 +85,10 @@ export class PostgresRepository implements Repository {
   async updateKnowledgeImport(job: StoredKnowledgeImportJob) {
     await this.pool.query('UPDATE knowledge_import_jobs SET status=$2, progress=$3, progress_label=$4, payload=$5, updated_at=$6 WHERE id=$1 AND organization_id=$7', [job.id, job.status, job.progress, job.progressLabel, job, job.updatedAt, job.organizationId]);
   }
-  async listKnowledgeImports(organizationId: string, limit: number) {
-    const { rows } = await this.pool.query<{ payload: StoredKnowledgeImportJob }>('SELECT payload FROM knowledge_import_jobs WHERE organization_id=$1 ORDER BY created_at DESC LIMIT $2', [organizationId, limit]);
+  async listKnowledgeImports(organizationId: string, limit: number, createdBy?: string) {
+    const { rows } = createdBy
+      ? await this.pool.query<{ payload: StoredKnowledgeImportJob }>('SELECT payload FROM knowledge_import_jobs WHERE organization_id=$1 AND created_by=$2 ORDER BY created_at DESC LIMIT $3', [organizationId, createdBy, limit])
+      : await this.pool.query<{ payload: StoredKnowledgeImportJob }>('SELECT payload FROM knowledge_import_jobs WHERE organization_id=$1 ORDER BY created_at DESC LIMIT $2', [organizationId, limit]);
     return rows.map((row) => row.payload);
   }
   async createKnowledgeIndexJob(job: StoredKnowledgeIndexJob) {

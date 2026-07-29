@@ -295,7 +295,7 @@ export class KnowledgeService {
   }
 
   async listImports(actor: RequestActor, limit = 20) {
-    return (await this.repository.listKnowledgeImports(actor.organizationId, limit)).map(publicImport);
+    return (await this.repository.listKnowledgeImports(actor.organizationId, limit, actor.userId)).map(publicImport);
   }
 
   async getImport(actor: RequestActor, id: string) {
@@ -557,7 +557,7 @@ export class KnowledgeService {
 
   private async requireImport(actor: RequestActor, id: string) {
     const job = await this.repository.getKnowledgeImport(id);
-    if (!job || job.organizationId !== actor.organizationId) throw new Error('导入任务不存在');
+    if (!job || job.organizationId !== actor.organizationId || job.createdBy !== actor.userId) throw new Error('导入任务不存在');
     return job;
   }
 

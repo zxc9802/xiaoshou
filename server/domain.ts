@@ -90,7 +90,7 @@ export interface Repository {
   createKnowledgeImport(job: StoredKnowledgeImportJob): Promise<void>;
   getKnowledgeImport(id: string): Promise<StoredKnowledgeImportJob | undefined>;
   updateKnowledgeImport(job: StoredKnowledgeImportJob): Promise<void>;
-  listKnowledgeImports(organizationId: string, limit: number): Promise<StoredKnowledgeImportJob[]>;
+  listKnowledgeImports(organizationId: string, limit: number, createdBy?: string): Promise<StoredKnowledgeImportJob[]>;
   createKnowledgeIndexJob(job: StoredKnowledgeIndexJob): Promise<void>;
   getKnowledgeIndexJob(id: string): Promise<StoredKnowledgeIndexJob | undefined>;
   updateKnowledgeIndexJob(job: StoredKnowledgeIndexJob): Promise<void>;

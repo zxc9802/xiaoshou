@@ -30,3 +30,12 @@ test('lists every pending import batch so the aggregate review count is accessib
     { id: 'older', label: '客户案例.docx · 1 条待确认' },
   ]);
 });
+
+test('keeps empty and failed import batches accessible for manual review', () => {
+  const options = buildReviewImportOptions([
+    importJob('empty', 'waiting_review', ['empty-source.pdf'], []),
+    importJob('failed', 'failed', ['failed-source.docx'], []),
+  ]);
+
+  assert.deepEqual(options.map((option) => option.id), ['empty', 'failed']);
+});

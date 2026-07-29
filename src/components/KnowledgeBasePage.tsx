@@ -86,8 +86,8 @@ export function KnowledgeBasePage({ onBack }: { onBack: () => void }) {
     return () => window.clearInterval(timer);
   }, [imports]);
 
-  const waitingReviewImports = useMemo(() => imports.filter((job) => job.status === 'waiting_review' && pendingCandidates(job).length > 0), [imports]);
-  const waitingReviewCount = waitingReviewImports.reduce((sum, job) => sum + pendingCandidates(job).length, 0);
+  const reviewableImports = useMemo(() => imports.filter((job) => job.status === 'waiting_review' || job.status === 'failed'), [imports]);
+  const activeImportCount = useMemo(() => imports.filter((job) => ['importing', 'extracting', 'analyzing', 'grouping'].includes(job.status)).length, [imports]);
 
   const visible = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -163,7 +163,8 @@ export function KnowledgeBasePage({ onBack }: { onBack: () => void }) {
       <div className="knowledge-actions">
         {viewScope === 'active' ? <>
           <button className="primary-button" onClick={() => setShowImportWizard(true)}><UploadIcon /> 导入资料</button>
-          <button className="secondary-button pending-review-button" disabled={waitingReviewCount === 0} onClick={() => setReviewJob(waitingReviewImports[0] ?? null)}>待确认 {waitingReviewCount}</button>
+          <button className="secondary-button pending-review-button" disabled={reviewableImports.length === 0} onClick={() => setReviewJob(reviewableImports[0] ?? null)}>待确认 {reviewableImports.length}</button>
+          {activeImportCount > 0 && <span className="knowledge-import-progress">正在解析 {activeImportCount} 批资料</span>}
           <button className="secondary-button" onClick={() => productMode ? setOpenProductForm(true) : setOpenForm(true)}><PlusIcon /> {productMode ? '新建产品' : '手动新增'}</button>
         </> : null}
         <button className="secondary-button" onClick={() => setViewScope((scope) => scope === 'active' ? 'trash' : 'active')}>{viewScope === 'active' ? '回收站' : '返回资料库'}</button>
@@ -211,7 +212,7 @@ export function KnowledgeBasePage({ onBack }: { onBack: () => void }) {
     {productDetail && <ProductDetailModal detail={productDetail} onClose={() => setProductDetail(null)} onOpenEntry={(entry) => { setProductDetail(null); setDetailEntry(entry); }} onChanged={async () => { const refreshed = await productApi.get(productDetail.product.id); setProductDetail(refreshed); await load(); }} />}
     {showUnmatched && <UnmatchedProductModal entries={unmatchedProductEntries} products={products} onClose={() => setShowUnmatched(false)} onOpenEntry={(entry) => { setShowUnmatched(false); setDetailEntry(entry); }} onChanged={async () => { await load(); }} />}
     {detailEntry && <KnowledgeDetailModal entry={detailEntry} businessCategories={[...defaultBusinessCategories]} onClose={() => setDetailEntry(null)} onSaved={async (entry) => { setDetailEntry(entry); await load(); }} />}
-    {showImportWizard && <ImportWizard products={products} onClose={() => setShowImportWizard(false)} onCreated={async (job) => { setShowImportWizard(false); setReviewJob(job.status === 'waiting_review' && pendingCandidates(job).length > 0 ? job : null); await load(); }} />}
+    {showImportWizard && <ImportWizard products={products} onClose={() => setShowImportWizard(false)} onCreated={async (job) => { setShowImportWizard(false); setReviewJob(job.status === 'waiting_review' || job.status === 'failed' ? job : null); await load(); }} />}
     {reviewJob && <ImportReviewModal key={reviewJob.id} job={reviewJob} imports={imports} products={products} businessCategories={[...defaultBusinessCategories]} onSelectJob={setReviewJob} onClose={() => setReviewJob(null)} onFinished={async () => { setReviewJob(null); await load(); }} />}
   </main>;
 }

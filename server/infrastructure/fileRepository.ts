@@ -136,8 +136,8 @@ export class FileRepository implements Repository {
   async createKnowledgeImport(job: StoredKnowledgeImportJob) { this.imports.set(job.id, structuredClone(job)); await this.persist(); }
   async getKnowledgeImport(id: string) { const job = this.imports.get(id); return job ? structuredClone(job) : undefined; }
   async updateKnowledgeImport(job: StoredKnowledgeImportJob) { this.imports.set(job.id, structuredClone(job)); await this.persist(); }
-  async listKnowledgeImports(organizationId: string, limit: number) {
-    return [...this.imports.values()].filter((job) => job.organizationId === organizationId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit).map((job) => structuredClone(job));
+  async listKnowledgeImports(organizationId: string, limit: number, createdBy?: string) {
+    return [...this.imports.values()].filter((job) => job.organizationId === organizationId && (!createdBy || job.createdBy === createdBy)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit).map((job) => structuredClone(job));
   }
   async createKnowledgeIndexJob(job: StoredKnowledgeIndexJob) { this.knowledgeIndexJobs.set(job.id, structuredClone(job)); await this.persist(); }
   async getKnowledgeIndexJob(id: string) { const job = this.knowledgeIndexJobs.get(id); return job ? structuredClone(job) : undefined; }

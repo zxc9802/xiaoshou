@@ -10,6 +10,7 @@ import { maskSensitive } from './mediaAnalyzer.js';
 
 const config: AppConfig = { port: 8787, host: '127.0.0.1', corsOrigin: '*', retentionDays: 365, workerMode: 'inline', repositoryDriver: 'memory', localDataDir: '.data-test', objectStorageDriver: 'memory', modelDriver: 'rule_based', embeddingModelName: 'text-embedding-3-large', knowledgeImportMaxTotalMb: 250, s3: { region: 'us-east-1', bucket: 'test', forcePathStyle: true } };
 const actor = { organizationId: 'org-1', userId: 'admin-1', role: 'admin' };
+const anotherUser = { organizationId: 'org-1', userId: 'seller-2', role: 'user' };
 
 class RecordingIndexScheduler implements KnowledgeIndexScheduler {
   readonly upserts: Array<{ organizationId: string; entryId: string }> = [];
@@ -31,6 +32,16 @@ async function createAndWait(service: KnowledgeService, files: Array<{ name: str
   const created = await service.createImport(actor, files);
   return waitForImport(service, created.id);
 }
+
+test('users only see and review their own import jobs', async () => {
+  const service = new KnowledgeService(new MemoryRepository(), new MemoryObjectStorage(), config);
+  const first = await service.createImport(actor, [{ name: 'first.txt', mimeType: 'text/plain', data: Buffer.from('first import') }]);
+  const second = await service.createImport(anotherUser, [{ name: 'second.txt', mimeType: 'text/plain', data: Buffer.from('second import') }]);
+
+  assert.deepEqual((await service.listImports(actor)).map((job) => job.id), [first.id]);
+  assert.deepEqual((await service.listImports(anotherUser)).map((job) => job.id), [second.id]);
+  await assert.rejects(service.getImport(anotherUser, first.id), /不存在/);
+});
 
 test('bulk import creates review candidates without publishing knowledge entries', async () => {
   const repository = new MemoryRepository();
