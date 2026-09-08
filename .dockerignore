@@ -1,11 +1,3 @@
-node_modules/
-dist/
-*.log
-*.tsbuildinfo
-server-dist/
-.env
-uploads/
-.data/
 
 # Server-side usage report outbox (contains employee IDs).
 .usage-outbox/

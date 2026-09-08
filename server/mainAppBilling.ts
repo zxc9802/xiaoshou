@@ -1,3 +1,4 @@
+import { runWithUsageUser } from './main-usage.js';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import { getMainAppUrl } from './sso.js';
@@ -23,7 +24,7 @@ export function runWithMainAppBillingUser<T>(
   userId: string,
   action: () => T,
 ): T {
-  return billingUserStorage.run(userId, action);
+  return runWithUsageUser(userId, () => billingUserStorage.run(userId, action));
 }
 
 function requiredValue(name: string) {

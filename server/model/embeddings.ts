@@ -1,3 +1,4 @@
+import { meteredFetch } from '../main-usage.js';
 import type { AppConfig } from '../config.js';
 
 export interface EmbeddingResult {
@@ -37,7 +38,7 @@ export async function createKnowledgeEmbedding(text: string, config: AppConfig):
   if (!baseUrl || !apiKey || !model) return undefined;
 
   if (config.embeddingApiStyle === 'gemini_generate_content') {
-    const response = await fetch(
+    const response = await meteredFetch(
       `${baseUrl}/v1beta/models/${encodeURIComponent(model)}:generateContent`,
       {
         method: 'POST',
@@ -60,7 +61,7 @@ export async function createKnowledgeEmbedding(text: string, config: AppConfig):
     };
   }
 
-  const response = await fetch(openAiEmbeddingsUrl(baseUrl), {
+  const response = await meteredFetch(openAiEmbeddingsUrl(baseUrl), {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     signal: AbortSignal.timeout(20_000),
