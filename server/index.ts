@@ -25,6 +25,7 @@ import {
   createSsoSessionCookie,
   exchangeMainAppSsoTicket,
   getPublicAppUrl,
+  getMainAppSsoLaunchUrl,
   getSsoSessionCookieMaxAge,
   readSsoSessionFromRequest,
   requestActor,
@@ -199,6 +200,8 @@ app.get('/api/health', async () => {
     retentionDays: config.retentionDays,
   };
 });
+
+app.get('/api/sso/login', async (_request, reply) => reply.redirect(getMainAppSsoLaunchUrl()));
 
 app.get('/api/sso/callback', async (request, reply) => {
   const ticket = String((request.query as { ticket?: string }).ticket ?? '').trim();

@@ -17,7 +17,7 @@ function fetch(path: string, init?: RequestInit) {
 async function parseResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     if (response.status === 401 && typeof window !== 'undefined') {
-      window.location.assign('https://www.qycm.top/home2?externalSso=xiaoshou');
+      window.location.assign(buildApiUrl('/api/sso/login', apiBaseUrl));
     }
     const body = await response.json().catch(() => ({ message: '请求失败' })) as { message?: string };
     throw new Error(body.message ?? `请求失败：${response.status}`);
