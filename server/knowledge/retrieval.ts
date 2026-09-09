@@ -1,3 +1,4 @@
+import { runWithUsageUser } from '../main-usage.js';
 import type { KnowledgeEntry } from '../../shared/contracts.js';
 import type { AppConfig } from '../config.js';
 import type { KnowledgeVectorIndex } from '../infrastructure/vectorIndex.js';
@@ -58,7 +59,7 @@ export async function retrieveKnowledge(
 
   if (options.vectorIndex) {
     try {
-      const embedding = await createKnowledgeEmbedding(formatRetrievalQuery(query), config);
+      const embedding = await runWithUsageUser(options.ownerId, () => createKnowledgeEmbedding(formatRetrievalQuery(query), config));
       if (embedding) {
         denseHits = await options.vectorIndex.search({
           organizationId: options.organizationId,

@@ -1,3 +1,4 @@
+import { meteredFetch } from '../main-usage.js';
 import type { AppConfig } from '../config.js';
 import {
   MainAppBillingError,
@@ -77,7 +78,7 @@ function authHeaders(config: AppConfig): Record<string, string> {
 async function fetchJson(url: string, config: AppConfig, init: RequestInit) {
   const mode = config.modelAuthMode ?? (config.modelApiStyle === 'gemini_generate_content' ? 'api_key_header' : 'bearer');
   const endpoint = mode === 'query' && config.modelApiKey ? appendQueryKey(url, config.modelApiKey) : url;
-  const response = await fetch(endpoint, {
+  const response = await meteredFetch(endpoint, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
