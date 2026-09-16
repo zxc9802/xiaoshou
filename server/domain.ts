@@ -20,6 +20,7 @@ export interface StoredKnowledgeImportJob extends KnowledgeImportJob {
 }
 
 export interface StoredKnowledgeIndexJob {
+  billingUserId?: string;
   id: string;
   organizationId: string;
   entryId: string;
