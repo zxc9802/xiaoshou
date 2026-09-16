@@ -11,8 +11,8 @@ test('sales text and embeddings report actual URL, counts and SSO employee', asy
  const dir=await mkdtemp(join(tmpdir(),'sales-usage-')); const oldFetch=globalThis.fetch,oldEnv={...process.env}; const reports=[],bills=[];
  Object.assign(process.env,{USAGE_MONITOR_INTERNAL_SECRET:'test',USAGE_MONITOR_OUTBOX_DIR:dir,MAIN_APP_URL:'https://main.test',MAIN_APP_SSO_CLIENT_SECRET:'test'});
  globalThis.fetch=async (url,init)=>{
-  if(String(url).endsWith('/api/sso/usage')) {reports.push(JSON.parse(init.body));return Response.json({});}
-  if(String(url).endsWith('/api/sso/billing')) {bills.push(JSON.parse(init.body));return Response.json({});}
+  if(String(url).endsWith('/api/sso/usage')) {reports.push(JSON.parse(init.body));return Response.json({success:true});}
+  if(String(url).endsWith('/api/sso/billing')) {bills.push(JSON.parse(init.body));return Response.json({success:true});}
   if(String(url).includes('embeddings')) return Response.json({data:[{embedding:[.1,.2]}],usage:{prompt_tokens:7,total_tokens:7}});
   return Response.json({choices:[{message:{content:'{}'}}],usage:{prompt_tokens:0,completion_tokens:0,total_tokens:0}});
  };

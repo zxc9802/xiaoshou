@@ -32,10 +32,11 @@ export function parseUsage(payload: unknown, embedding = false) {
   }
   const reasoningTokens = count(outputDetails.reasoning_tokens ?? gemini.thoughtsTokenCount);
   let outputTokens = count(usage.completion_tokens ?? usage.output_tokens);
-  if (outputTokens === null) outputTokens = add(count(gemini.candidatesTokenCount), count(gemini.thoughtsTokenCount));
+  const candidatesTokens = count(gemini.candidatesTokenCount);
+  if (outputTokens === null && candidatesTokens !== null) outputTokens = candidatesTokens + (count(gemini.thoughtsTokenCount) ?? 0);
   if (embedding && inputTokens !== null && outputTokens === null) outputTokens = 0;
-  const totalTokens = count(usage.total_tokens ?? gemini.totalTokenCount)
-    ?? (inputTokens !== null && outputTokens !== null ? inputTokens + outputTokens : null);
+  const totalTokens = inputTokens !== null && outputTokens !== null
+    ? inputTokens + outputTokens : count(usage.total_tokens ?? gemini.totalTokenCount);
   let imageInputTokens = count(inputDetails.image_tokens ?? usage.image_input_tokens);
   if (imageInputTokens === null && Array.isArray(gemini.promptTokensDetails)) {
     const images = gemini.promptTokensDetails.map(record).filter(item => String(item.modality).toUpperCase() === 'IMAGE');
@@ -140,6 +141,8 @@ export function createUsageReporter(options: ReporterOptions) {
           signal: AbortSignal.timeout(Math.min(1_500, remaining)),
         });
         if (!response.ok) break;
+        const acknowledgement = record(await response.json().catch(() => null));
+        if (acknowledgement.success !== true) break;
         await store.remove(key);
       } catch { break; }
     }
