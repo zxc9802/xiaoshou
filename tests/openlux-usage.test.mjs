@@ -29,7 +29,7 @@ test('durable metadata-only retry retains UUID and verified user; actual attempt
   const reporter=createUsageReporter({tool:'xiaoshou',getMainAppUrl:()=> 'https://main.test', secret:()=> 'test-secret',outboxDir:()=>dir,fetchImpl:async (_url,init)=>{
     const event=JSON.parse(init.body); requests.push(event);
     assert.equal(init.headers['x-usage-tool'],'xiaoshou');
-    return new Response('{}',{status:online?200:503});
+    return new Response('{"success":true}',{status:online?200:503});
   }});
   try {
     assert.equal(reporter.enabled('https://yunwu.ai/v1'),false);
@@ -51,7 +51,7 @@ test('durable metadata-only retry retains UUID and verified user; actual attempt
 
 test('async acceptance remains pending and terminal state cannot be overwritten', async () => {
   const dir=await mkdtemp(join(tmpdir(),'usage-pending-')); const events=[];
-  const reporter=createUsageReporter({tool:'test',getMainAppUrl:()=> 'https://main.test',secret:()=> 'secret',outboxDir:()=>dir,fetchImpl:async(_url,init)=>{events.push(JSON.parse(init.body));return Response.json({});}});
+  const reporter=createUsageReporter({tool:'test',getMainAppUrl:()=> 'https://main.test',secret:()=> 'secret',outboxDir:()=>dir,fetchImpl:async(_url,init)=>{events.push(JSON.parse(init.body));return Response.json({success:true});}});
   try {
     const call=await reporter.begin({url:'https://api.openlux.ai/v1',model:'m',userId:'u'});
     await call.finish('pending'); assert.equal(events.filter(e=>e.status==='completed').length,0);
@@ -66,4 +66,23 @@ test('accepted asynchronous work is pending until a terminal upstream response',
  assert.equal(responseStatus(200, {data:{task_id:'job',status:'processing'}}), 'pending');
  assert.equal(responseStatus(200, {data:[{url:'private'}]}), 'completed');
  assert.equal(responseStatus(200, {error:{message:'failed'}}), 'failed');
+});
+
+
+test('normalizes totals to known input plus output and preserves incomplete Gemini output', () => {
+  assert.equal(parseUsage({usage:{prompt_tokens:5,completion_tokens:2,total_tokens:999}}).totalTokens,7);
+  assert.equal(parseUsage({usageMetadata:{promptTokenCount:5,thoughtsTokenCount:2}}).outputTokens,null);
+});
+
+test('only an explicit successful JSON acknowledgement removes durable reports', async () => {
+  const directory=await mkdtemp(join(tmpdir(),'usage-ack-'));
+  let acknowledgement='html';
+  const reporter=createUsageReporter({tool:'xiaoshou',getMainAppUrl:()=> 'https://main.test',secret:()=> 'test',outboxDir:()=>directory,fetchImpl:async()=>acknowledgement==='html'?new Response('<html>login</html>'):Response.json({success:acknowledgement==='success'})});
+  try {
+    const call=await reporter.begin({url:'https://api.openlux.ai/v1',model:'m',userId:'employee'});
+    await call.finish('completed');
+    assert.equal((await readdir(directory)).length,2);
+    acknowledgement='false';await reporter.flush();assert.equal((await readdir(directory)).length,2);
+    acknowledgement='success';await reporter.flush();assert.equal((await readdir(directory)).length,0);
+  } finally {await rm(directory,{recursive:true,force:true});}
 });
