@@ -296,11 +296,11 @@ export class AnalysisService {
       if (this.config.analysisKnowledgeEnabled) {
         await this.save(job, 'retrieving', 62, '正在按L0-L4检索规则与资料');
         const allKnowledge = await this.repository.listKnowledge(job.organizationId);
-        knowledge = await retrieveKnowledge(allKnowledge, `${job.request.product ?? ''}\n${job.request.conversation}\n${job.transcript.lastMessage}\n销售情境：${localClassification.deadlockType}；异议：${localClassification.objectionType}；阶段：${localClassification.decisionStage}；目标：成交推进`, this.config, {
+        knowledge = await runWithMainAppBillingUser(job.createdBy, () => retrieveKnowledge(allKnowledge, `${job.request.product ?? ''}\n${job.request.conversation}\n${job.transcript!.lastMessage}\n销售情境：${localClassification.deadlockType}；异议：${localClassification.objectionType}；阶段：${localClassification.decisionStage}；目标：成交推进`, this.config, {
           organizationId: job.organizationId,
           ownerId: job.createdBy,
           vectorIndex: this.vectorIndex,
-        });
+        }));
         await pause(120);
       }
       await this.save(job, 'generating', 78, this.config.analysisKnowledgeEnabled ? '正在生成回复与后续动作' : '正在使用AI生成销管建议');
