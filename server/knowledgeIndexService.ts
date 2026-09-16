@@ -1,4 +1,3 @@
-import { runWithMainAppBillingUser } from './mainAppBilling.js';
 import { randomUUID } from 'node:crypto';
 import type { AppConfig } from './config.js';
 import type { Repository, StoredKnowledgeIndexJob } from './domain.js';
@@ -12,7 +11,7 @@ type EmbeddingFunction = (
 ) => Promise<EmbeddingResult | undefined>;
 
 export interface KnowledgeIndexScheduler {
-  scheduleUpsert(organizationId: string, entryId: string, billingUserId?: string): Promise<void>;
+  scheduleUpsert(organizationId: string, entryId: string): Promise<void>;
   scheduleDelete(organizationId: string, entryId: string): Promise<void>;
 }
 
@@ -24,7 +23,7 @@ export class KnowledgeIndexService implements KnowledgeIndexScheduler {
     private readonly embed: EmbeddingFunction = createKnowledgeEmbedding,
   ) {}
 
-  async scheduleUpsert(organizationId: string, entryId: string, billingUserId?: string) {
+  async scheduleUpsert(organizationId: string, entryId: string) {
     const entry = await this.repository.getKnowledge(entryId);
     if (entry) {
       await this.repository.updateKnowledge(organizationId, {
@@ -40,18 +39,17 @@ export class KnowledgeIndexService implements KnowledgeIndexScheduler {
         updatedAt: new Date().toISOString(),
       });
     }
-    await this.schedule(organizationId, entryId, 'upsert', billingUserId);
+    await this.schedule(organizationId, entryId, 'upsert');
   }
 
   async scheduleDelete(organizationId: string, entryId: string) {
     await this.schedule(organizationId, entryId, 'delete');
   }
 
-  private async schedule(organizationId: string, entryId: string, action: 'upsert' | 'delete', billingUserId?: string) {
+  private async schedule(organizationId: string, entryId: string, action: 'upsert' | 'delete') {
     const now = new Date().toISOString();
     const job: StoredKnowledgeIndexJob = {
       id: randomUUID(),
-      billingUserId,
       organizationId,
       entryId,
       action,
@@ -81,9 +79,7 @@ export class KnowledgeIndexService implements KnowledgeIndexScheduler {
         const chunks = buildKnowledgeChunks(job.organizationId, entry);
         const points: KnowledgeVectorPoint[] = [];
         for (const chunk of chunks) {
-          const embedding = await (job.billingUserId
-            ? runWithMainAppBillingUser(job.billingUserId, () => this.embed(chunk.embeddingText, this.config))
-            : this.embed(chunk.embeddingText, this.config));
+          const embedding = await this.embed(chunk.embeddingText, this.config);
           if (!embedding) throw new Error('向量模型未配置');
           points.push({
             id: chunk.id,

@@ -108,22 +108,3 @@ npm run build:api
 - `server/knowledge/pilot-enterprise.example.json`：企业首批知识录入模板
 
 资料库支持批量导入PDF、DOCX、PPTX、XLSX、CSV、JSON、TXT、Markdown、HTML、图片、zip资料包及其他非可执行内容文件。系统会先自动提取、拆分、建议归档，再由管理员确认发布。无法可靠提取正文的格式会保留原文件、给出低置信度建议，并停在人工审核状态。
-
-
-## OpenLux usage reporting
-
-Deploy the updated main application's `/api/sso/usage` and legacy billing `usageReportedSeparately` support before deploying this tool. Reserve/settle/release business charges and existing billing estimates are preserved; the flag suppresses only duplicate legacy usage records.
-
-Server-only environment:
-- `USAGE_MONITOR_INTERNAL_SECRET`: this tool's own main-site usage secret, registered under tool key `xiaoshou`.
-- `MAIN_APP_URL`: existing main application origin, default `https://www.qycm.top`.
-- `USAGE_MONITOR_URL`: optional full canonical usage endpoint override.
-- `USAGE_MONITOR_OUTBOX_DIR`: persistent writable directory, default `.data/usage-outbox/xiaoshou`. Mount persistent storage on every server/worker; ephemeral/serverless filesystems are not durable. Never use model keys or another tool's secret for usage reporting.
-
-Only actual upstream hostname `api.openlux.ai` qualifies. Each actual HTTP attempt receives its own UUID, reused when retrying delivery. The report includes only metadata, server-verified SSO employee ID and upstream usage counts, including cache, image input and reasoning details. Missing values stay null; explicit zero stays zero. No prompts, response text, files, image URLs, keys, local cost calculations or byte-length token estimates are sent to the canonical endpoint.
-
-Pending metadata is persisted before the model call; completed/failed/interrupted events are persisted before delivery. An HTTP 202 or pending upstream status stays pending. Each later call drains up to ten events within three seconds; delivery failures retain metadata. Explicit retry: `node --experimental-strip-types scripts/retry-usage.mjs` using the same environment and persistent mount, repeated for large backlogs. The command attempts delivery; check retained outbox files for backlog. No automatic background retry is claimed. Failed persistent-storage initialization leaves legacy usage enabled. Server/storage failures after a model call can leave only pending metadata and must be investigated from operational logs.
-
-Text generation, retrieval embeddings and background index embeddings are covered. New index jobs persist the verified employee supplied by authenticated publish/update/restore actions. File/Postgres job payload storage preserves this field across worker restarts. Older queued index jobs and standalone CLI reindex operations have no verified SSO employee and are intentionally unattributed; do not invent one from browser fields or an arbitrary environment ID.
-
-Tests: `node --import tsx --test tests/openlux-client.test.mjs tests/openlux-usage.test.mjs server/knowledgeIndexService.test.ts`; existing `npm test`, `npm run build`, and `npm run build:api`.

@@ -12,8 +12,6 @@ type TokenUsage = {
 
 const billingUserStorage = new AsyncLocalStorage<string>();
 
-export function currentBillingUserId() { return billingUserStorage.getStore(); }
-
 export class MainAppBillingError extends Error {
   constructor(message: string) {
     super(message);
@@ -67,7 +65,6 @@ function noopHandle() {
 export async function reserveTextCredits(input: {
   operation: string;
   providerId: string;
-  usageReportedSeparately?: boolean;
   model: string;
   estimatedInputTokens: number;
   maxOutputTokens: number;
@@ -83,7 +80,6 @@ export async function reserveTextCredits(input: {
     operation: input.operation,
     providerId: input.providerId,
     model: input.model,
-    ...(input.usageReportedSeparately ? { usageReportedSeparately: true } : {}),
   };
   await postBilling(userId, {
     action: 'reserve',

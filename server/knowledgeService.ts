@@ -421,7 +421,7 @@ export class KnowledgeService {
         },
       };
       await this.repository.createKnowledge(actor.organizationId, entry);
-      await this.indexScheduler.scheduleUpsert(actor.organizationId, entry.id, actor.userId);
+      await this.indexScheduler.scheduleUpsert(actor.organizationId, entry.id);
       publishedIds.push(entry.id);
     }
     job.status = 'published'; job.progress = 100; job.progressLabel = '已确认发布到资料库'; job.publishedEntryIds = publishedIds;
@@ -482,7 +482,7 @@ export class KnowledgeService {
     for (const entry of entries as KnowledgeEntry[]) {
       const restored: KnowledgeEntry = { ...entry, status: entry.deletedFromStatus ?? 'draft', deletedAt: undefined, purgeAt: undefined, deletedFromStatus: undefined, updatedAt: now };
       await this.repository.updateKnowledge(actor.organizationId, restored);
-      if (this.isVectorEligible(restored)) await this.indexScheduler.scheduleUpsert(actor.organizationId, entry.id, actor.userId);
+      if (this.isVectorEligible(restored)) await this.indexScheduler.scheduleUpsert(actor.organizationId, entry.id);
     }
     await this.repository.addAudit({ id: randomUUID(), organizationId: actor.organizationId, userId: actor.userId, action: 'knowledge.restore', targetType: 'knowledge', targetId: uniqueIds.join(','), metadata: { ids: uniqueIds }, createdAt: now });
     return this.list(actor.organizationId, 'active');
@@ -513,13 +513,13 @@ export class KnowledgeService {
     if (format === 'markdown') return { fileName: `knowledge-export-${new Date().toISOString().slice(0, 10)}.md`, contentType: 'text/markdown; charset=utf-8', content: rows.map((entry) => `## ${entry.layer} ${entry.title}\n\n- 分类：${entry.category}\n- 业务归档：${String(entry.structuredData?.businessCategory ?? '未标注')}\n- 版本：${entry.version}\n- 审核人：${entry.reviewer ?? '未记录'}\n- 发布时间：${entry.publishedAt ?? '未记录'}\n\n${entry.content}`).join('\n\n---\n\n') };
     return { fileName: `knowledge-export-${new Date().toISOString().slice(0, 10)}.xls`, contentType: 'application/vnd.ms-excel; charset=utf-8', content: this.excelXml(rows) };
   }
-  async update(organizationId: string, id: string, input: Partial<Pick<KnowledgeEntry, 'category' | 'title' | 'content' | 'structuredData' | 'version' | 'effectiveFrom' | 'effectiveTo' | 'status'>>, billingUserId?: string) {
+  async update(organizationId: string, id: string, input: Partial<Pick<KnowledgeEntry, 'category' | 'title' | 'content' | 'structuredData' | 'version' | 'effectiveFrom' | 'effectiveTo' | 'status'>>) {
     const existing = await this.repository.getKnowledge(id); if (!existing) throw new Error('Knowledge entry not found');
     if (isSystemLocked(existing)) throw new Error('系统通用条目已锁定，不允许修改');
     const entry = { ...existing, ...input, id: existing.id, layer: existing.layer, updatedAt: new Date().toISOString() };
     await this.repository.updateKnowledge(organizationId, entry);
     if (this.isVectorEligible(entry) && this.indexFingerprint(existing) !== this.indexFingerprint(entry)) {
-      await this.indexScheduler.scheduleUpsert(organizationId, entry.id, billingUserId);
+      await this.indexScheduler.scheduleUpsert(organizationId, entry.id);
     } else if (this.isVectorEligible(existing) && !this.isVectorEligible(entry)) {
       await this.indexScheduler.scheduleDelete(organizationId, entry.id);
     }
@@ -532,7 +532,7 @@ export class KnowledgeService {
     const now = new Date().toISOString(); const entry = { ...existing, status, reviewer, publishedAt: status === 'published' ? now : existing.publishedAt, updatedAt: now };
     await this.repository.updateKnowledge(organizationId, entry);
     if (entry.layer === 'L2' || entry.layer === 'L3') {
-      if (this.isVectorEligible(entry)) await this.indexScheduler.scheduleUpsert(organizationId, entry.id, reviewer);
+      if (this.isVectorEligible(entry)) await this.indexScheduler.scheduleUpsert(organizationId, entry.id);
       else await this.indexScheduler.scheduleDelete(organizationId, entry.id);
     }
     return entry;
@@ -544,7 +544,7 @@ export class KnowledgeService {
     const now = new Date().toISOString();
     const entry: KnowledgeEntry = { ...existing, ...input, structuredData: { ...existing.structuredData, requiresHumanConfirmation: false, classificationConfirmedAt: now, classificationConfirmedBy: reviewer }, status: 'published', reviewer, publishedAt: now, updatedAt: now };
     await this.repository.updateKnowledge(organizationId, entry);
-    await this.indexScheduler.scheduleUpsert(organizationId, entry.id, reviewer);
+    await this.indexScheduler.scheduleUpsert(organizationId, entry.id);
     return entry;
   }
 

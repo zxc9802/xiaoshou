@@ -1,5 +1,3 @@
-import { fetchWithUsage, usageReporter } from '../usageMonitor.js';
-import { providerHostname } from '../openlux-usage.js';
 import type { AppConfig } from '../config.js';
 import {
   MainAppBillingError,
@@ -79,7 +77,7 @@ function authHeaders(config: AppConfig): Record<string, string> {
 async function fetchJson(url: string, config: AppConfig, init: RequestInit) {
   const mode = config.modelAuthMode ?? (config.modelApiStyle === 'gemini_generate_content' ? 'api_key_header' : 'bearer');
   const endpoint = mode === 'query' && config.modelApiKey ? appendQueryKey(url, config.modelApiKey) : url;
-  const response = await fetchWithUsage(endpoint, {
+  const response = await fetch(endpoint, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
@@ -104,8 +102,7 @@ async function generateOpenAIJson(config: AppConfig, input: Required<Pick<Genera
     + input.media.length * 4_000;
   const billing = await reserveTextCredits({
     operation: 'generate-json',
-    providerId: providerHostname(`${config.modelBaseUrl!.replace(/\/$/, '')}/chat/completions`),
-    usageReportedSeparately: await usageReporter.ready(`${config.modelBaseUrl!.replace(/\/$/, '')}/chat/completions`),
+    providerId: 'openai-compatible',
     model: input.model,
     estimatedInputTokens,
     maxOutputTokens,
@@ -143,8 +140,7 @@ async function generateGeminiJson(config: AppConfig, input: Required<Pick<Genera
     + input.media.length * 4_000;
   const billing = await reserveTextCredits({
     operation: 'generate-json',
-    providerId: providerHostname(geminiEndpoint(config.modelBaseUrl!, input.model)),
-    usageReportedSeparately: await usageReporter.ready(geminiEndpoint(config.modelBaseUrl!, input.model)),
+    providerId: 'gemini',
     model: input.model,
     estimatedInputTokens,
     maxOutputTokens,

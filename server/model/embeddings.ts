@@ -1,4 +1,3 @@
-import { fetchWithUsage } from '../usageMonitor.js';
 import type { AppConfig } from '../config.js';
 
 export interface EmbeddingResult {
@@ -38,7 +37,7 @@ export async function createKnowledgeEmbedding(text: string, config: AppConfig):
   if (!baseUrl || !apiKey || !model) return undefined;
 
   if (config.embeddingApiStyle === 'gemini_generate_content') {
-    const response = await fetchWithUsage(
+    const response = await fetch(
       `${baseUrl}/v1beta/models/${encodeURIComponent(model)}:generateContent`,
       {
         method: 'POST',
@@ -46,7 +45,6 @@ export async function createKnowledgeEmbedding(text: string, config: AppConfig):
         signal: AbortSignal.timeout(20_000),
         body: JSON.stringify({ content: { parts: [{ text }] } }),
       },
-      true,
     );
     if (!response.ok) throw new Error(`向量生成失败：${response.status}`);
     const body = await response.json() as {
@@ -62,12 +60,12 @@ export async function createKnowledgeEmbedding(text: string, config: AppConfig):
     };
   }
 
-  const response = await fetchWithUsage(openAiEmbeddingsUrl(baseUrl), {
+  const response = await fetch(openAiEmbeddingsUrl(baseUrl), {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     signal: AbortSignal.timeout(20_000),
     body: JSON.stringify({ model, input: text }),
-  }, true);
+  });
   if (!response.ok) throw new Error(`向量生成失败：${response.status}`);
   const body = await response.json() as {
     model?: string;

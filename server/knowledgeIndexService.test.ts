@@ -155,20 +155,3 @@ test('embedding failure schedules exponential retry and keeps the source publish
   assert.equal(stored?.status, 'published');
   assert.equal((stored?.structuredData?.embedding as { status?: string })?.status, 'failed');
 });
-
- test('index queue persists the SSO employee across worker restart', async () => {
-  const repository = new MemoryRepository();
-  await repository.createKnowledge('org-a', entry());
-  const service = new KnowledgeIndexService(repository, new RecordingVectorIndex(), config);
-  await service.scheduleUpsert('org-a', entry().id, 'verified-employee');
-  const jobs = await repository.listKnowledgeIndexJobs('org-a', 10);
-  assert.equal(jobs[0]?.billingUserId, 'verified-employee');
-  const { currentBillingUserId } = await import('./mainAppBilling.js');
-  let observed: string | undefined;
-  const worker = new KnowledgeIndexService(repository, new RecordingVectorIndex(), config, async () => {
-    observed = currentBillingUserId();
-    return { model: 'embed', modelVersion: '1', vector: [0.1, 0.2] };
-  });
-  await worker.processPending();
-  assert.equal(observed, 'verified-employee');
-});
