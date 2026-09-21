@@ -165,14 +165,17 @@ export async function exchangeMainAppSsoTicket(ticket: string): Promise<{
   };
 }
 
-export async function validateMainAppSession(session: SsoSession): Promise<boolean> {
+export async function validateMainAppSession(session: SsoSession): Promise<'valid' | 'invalid' | 'unavailable'> {
+  if (session.expiresAt <= Date.now()) return 'invalid';
   try {
     const response = await fetch(`${getMainAppUrl()}/api/sso/session`, {
+      signal: AbortSignal.timeout(10_000),
+      redirect: 'error',
       headers: { Authorization: `Bearer ${session.token}` },
     });
-    return response.ok;
+    return response.ok ? 'valid' : response.status === 401 || response.status === 403 ? 'invalid' : 'unavailable';
   } catch {
-    return false;
+    return 'unavailable';
   }
 }
 

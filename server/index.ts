@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { extname } from 'node:path';
-import Fastify, { type FastifyRequest } from 'fastify';
+import Fastify, { type FastifyRequest, type FastifyReply } from 'fastify';
 import multipart from '@fastify/multipart';
 import { unzipSync } from 'fflate';
 import { z } from 'zod';
@@ -217,16 +217,27 @@ app.get('/api/sso/callback', async (request, reply) => {
   }
 });
 
+function sendSsoUnavailable(reply: FastifyReply) {
+  return reply.header('Cache-Control', 'no-store').header('Retry-After', '5').code(503).send({
+    message: '暂时无法验证主站登录，登录凭证已保留，请稍后重试。',
+    code: 'SSO_VALIDATION_UNAVAILABLE',
+  });
+}
+
 app.get('/api/sso/session', async (request, reply) => {
   const session = readSsoSessionFromRequest(request);
-  if (session && await validateMainAppSession(session)) return { success: true, data: { user: session.user } };
+  const validation = session ? await validateMainAppSession(session) : 'invalid';
+  if (validation === 'unavailable') return sendSsoUnavailable(reply);
+  if (session && validation === 'valid') return { success: true, data: { user: session.user } };
   return reply.header('Set-Cookie', clearSsoSessionCookie()).code(401).send({ message: '主站登录状态已失效' });
 });
 
 app.addHook('preHandler', async (request, reply) => {
   if (!request.url.startsWith('/api/v1/')) return;
   const session = readSsoSessionFromRequest(request);
-  if (!session || !await validateMainAppSession(session)) {
+  const validation = session ? await validateMainAppSession(session) : 'invalid';
+  if (validation === 'unavailable') return sendSsoUnavailable(reply);
+  if (!session || validation !== 'valid') {
     return reply.header('Set-Cookie', clearSsoSessionCookie()).code(401).send({ message: '请先登录主站后再访问销转智能体' });
   }
   request.ssoActor = requestActor(session);
