@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS analysis_feedback (
 );
 
 CREATE TABLE IF NOT EXISTS knowledge_entries (
-  id uuid PRIMARY KEY,
+  id text PRIMARY KEY,
   organization_id text,
   layer text NOT NULL CHECK (layer IN ('L0','L1','L2','L3','L4')),
   category text NOT NULL,
@@ -78,7 +78,7 @@ CREATE INDEX IF NOT EXISTS knowledge_import_jobs_org_created_idx ON knowledge_im
 CREATE TABLE IF NOT EXISTS knowledge_index_jobs (
   id uuid PRIMARY KEY,
   organization_id text NOT NULL,
-  entry_id uuid NOT NULL,
+  entry_id text NOT NULL,
   action text NOT NULL CHECK (action IN ('upsert','delete')),
   status text NOT NULL CHECK (status IN ('queued','processing','completed','failed')),
   attempts integer NOT NULL DEFAULT 0,
